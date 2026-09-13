@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>BookLeaf Reader — V4</title>
+<title>BookLeaf Reader — V5</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module"></script>
 
 <style>
@@ -16,11 +16,13 @@
   --glass-2:rgba(255,255,255,.06);
   --glass-border:rgba(255,255,255,.22);
 }
-*{box-sizing:border-box}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;tap-highlight-color:transparent}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:var(--txt);
   font-family:-apple-system,"SF Pro Display",Inter,Arial,sans-serif;-webkit-font-smoothing:antialiased}
 button,input,select{font:inherit}
-button{border:0;background:transparent;color:#fff;cursor:pointer}
+button{border:0;background:transparent;color:#fff;cursor:pointer;outline:none;-webkit-user-select:none;user-select:none;touch-action:manipulation}
+button::-moz-focus-inner{border:0}
+button:focus,input:focus,select:focus{outline:none}
 
 #app{width:100%;height:100%;position:relative;overflow:hidden;background:#0b0b0e}
 #bgImage{position:absolute;inset:-40px;z-index:0;background-size:cover;background-position:center;
@@ -39,9 +41,9 @@ button{border:0;background:transparent;color:#fff;cursor:pointer}
   box-shadow:0 10px 34px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.22);
 }
 .glassBtn{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  font-size:17px;opacity:.85;transition:.18s;flex-shrink:0}
+  font-size:17px;opacity:.85;transition:opacity .18s,transform .18s,background .18s;flex-shrink:0}
 .glassBtn:hover{opacity:1;background:rgba(255,255,255,.12);transform:scale(1.06)}
-.glassBtn:active{transform:scale(.94)}
+.glassBtn:active{transform:scale(.94);background:rgba(255,255,255,.16)}
 .glassBtn.on{background:var(--accent);opacity:1;box-shadow:0 4px 14px rgba(94,92,230,.5)}
 
 /* ---------- reader ---------- */
@@ -68,10 +70,13 @@ button{border:0;background:transparent;color:#fff;cursor:pointer}
   background:linear-gradient(90deg,transparent,rgba(0,0,0,.28) 45%,rgba(0,0,0,.28) 55%,transparent);opacity:0;transition:opacity .2s}
 #book:not(.singleView) #spine{opacity:1}
 
-.stack{position:absolute;top:8px;bottom:8px;width:2px;border-radius:2px;opacity:0;transition:width .25s,opacity .25s;
-  background:repeating-linear-gradient(180deg,#d9d4c8 0 2px,#c4bfae 2px 3px);box-shadow:0 3px 8px rgba(0,0,0,.35);z-index:1}
-#stackLeft{left:-9px}
-#stackRight{right:-9px}
+/* paper-stack ribbons: anchored to grow OUTWARD from the book only, so they
+   can never creep on top of the page itself, at rest or mid-flip */
+.stack{position:absolute;top:8px;bottom:8px;width:2px;border-radius:2px;opacity:0;z-index:0;
+  transition:width .25s,opacity .25s;pointer-events:none;
+  background:repeating-linear-gradient(180deg,#d9d4c8 0 2px,#c4bfae 2px 3px);box-shadow:0 3px 8px rgba(0,0,0,.35)}
+#stackLeft{right:100%;margin-right:1px}
+#stackRight{left:100%;margin-left:1px}
 
 #turnPage{position:absolute;z-index:15;top:0;right:0;display:none;transform-style:preserve-3d;
   transform-origin:left center;pointer-events:none}
@@ -93,7 +98,6 @@ button{border:0;background:transparent;color:#fff;cursor:pointer}
   100%{transform:rotateY(180deg);box-shadow:0 10px 20px rgba(0,0,0,.1)}
 }
 
-/* corner fold — purely visual + tap-to-turn, never triggers the UI */
 #corner{position:absolute;z-index:30;right:0;bottom:0;width:0;height:0;cursor:pointer;
   border-style:solid;border-width:0 0 34px 34px;border-color:transparent transparent rgba(255,255,255,.16) transparent;
   transition:.2s;filter:drop-shadow(0 -2px 4px rgba(0,0,0,.25))}
@@ -101,7 +105,7 @@ button{border:0;background:transparent;color:#fff;cursor:pointer}
 
 .side{position:absolute;z-index:60;top:50%;width:64px;height:64px;transform:translateY(-50%);
   display:flex;align-items:center;justify-content:center;font-size:26px;border-radius:50%;
-  color:#fff;opacity:0;transition:.2s}
+  color:#fff;opacity:0;transition:opacity .2s,background .2s}
 #reader:hover .side{opacity:.5}
 .side:hover{opacity:1!important;background:rgba(255,255,255,.1)}
 #prev{left:14px}#next{right:14px}
@@ -110,7 +114,6 @@ button{border:0;background:transparent;color:#fff;cursor:pointer}
 #floatMenu{position:absolute;z-index:100;top:16px;left:16px;width:46px;height:46px;border-radius:50%;
   display:flex;align-items:center;justify-content:center;font-size:19px}
 
-/* ---------- rest of the UI: only visible while open ---------- */
 #uiLayer{position:absolute;inset:0;z-index:80;pointer-events:none}
 #uiLayer>*{pointer-events:auto}
 .ui{position:absolute;display:flex;align-items:center;gap:10px;transition:opacity .3s,transform .3s}
@@ -136,22 +139,20 @@ button{border:0;background:transparent;color:#fff;cursor:pointer}
 #startScreen .card{padding:34px 30px;border-radius:30px;max-width:560px}
 #startScreen h1{font-size:26px;font-weight:600;margin:0 0 10px;letter-spacing:-.02em}
 #startScreen p{opacity:.68;line-height:1.55;font-size:14px;margin:0 0 20px}
+.actionsRow{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px}
 .action{padding:11px 18px;border-radius:16px;background:rgba(255,255,255,.1);border:1px solid var(--glass-border);
-  color:#fff;margin:5px;cursor:pointer;font-size:13.5px;transition:.15s}
+  color:#fff;cursor:pointer;font-size:13.5px;transition:.15s;display:inline-flex;align-items:center;gap:6px}
 .action:hover{background:rgba(255,255,255,.18);transform:translateY(-1px)}
 .action.primary{background:var(--accent);border:0}
+.action.wide{margin-top:6px}
 
 #library{display:none;align-items:stretch;justify-content:flex-start}
 #library.open{display:flex}
 .libraryHead{width:100%;display:flex;justify-content:space-between;align-items:center;gap:14px;
   max-width:1040px;flex-wrap:wrap;padding:0 6px}
 .libraryHead h2{font-weight:600;font-size:19px;margin:0;letter-spacing:-.01em}
-#bgUrlRow{display:flex;align-items:center;gap:6px;border-radius:16px;padding:6px 10px;flex:1;min-width:230px;max-width:420px}
-#bgUrlInput{flex:1;background:transparent;border:0;outline:0;color:#fff;font-size:12.5px;min-width:0}
-#bgUrlInput::placeholder{color:rgba(255,255,255,.4)}
-.libSection{width:100%;max-width:1040px;text-align:left;padding:14px 6px 0;font-size:12px;opacity:.55}
 #books{width:100%;max-width:1040px;display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));
-  gap:16px;overflow:auto;padding:12px 6px 18px}
+  gap:16px;overflow:auto;padding:18px 6px}
 .bookCard{min-height:212px;border-radius:18px;overflow:hidden;cursor:pointer;position:relative;text-align:left;
   transition:.18s;background:linear-gradient(155deg,rgba(255,255,255,.1),rgba(255,255,255,.03));
   border:1px solid rgba(255,255,255,.14)}
@@ -221,7 +222,6 @@ button{border:0;background:transparent;color:#fff;cursor:pointer}
 
   <div class="ui glass" id="topRight">
    <button class="glassBtn" id="libraryBtn" title="Biblioteca">▦</button>
-   <button class="glassBtn" id="orientation" title="Orientación">↕</button>
    <button class="glassBtn" id="night" title="Modo nocturno">☾</button>
    <button class="glassBtn" id="auto" title="Lectura automática">▶</button>
    <button class="glassBtn" id="music" title="Música">♫</button>
@@ -268,22 +268,17 @@ button{border:0;background:transparent;color:#fff;cursor:pointer}
  <div class="card glass">
   <h1>📖 BookLeaf Reader</h1>
   <p>Lector PDF con efecto de libro real: portada, lomo, contraportada, biblioteca, memoria de página, música y modo nocturno.</p>
-  <div>
+  <div class="actionsRow">
    <label class="action primary">📄 Abrir PDF<input id="pdfInput" type="file" accept="application/pdf" hidden></label>
    <label class="action">🎵 Añadir música<input id="audioInput" type="file" accept="audio/*" hidden></label>
   </div>
-  <button class="action" id="openLibrary">▦ Abrir biblioteca</button>
+  <button class="action wide" id="openLibrary">▦ Abrir biblioteca</button>
  </div>
 </div>
 
 <div id="library">
  <div class="libraryHead">
   <h2>Mi biblioteca</h2>
-  <div id="bgUrlRow" class="glass">
-    <input id="bgUrlInput" type="text" placeholder="Pega el link de una imagen de fondo…">
-    <button class="glassBtn" id="applyBg" title="Aplicar fondo" style="width:30px;height:30px;font-size:14px">✓</button>
-    <button class="glassBtn" id="clearBg" title="Quitar fondo" style="width:30px;height:30px;font-size:13px">✕</button>
-  </div>
   <div>
    <label class="action">＋ Añadir PDF<input id="libraryInput" type="file" accept="application/pdf" hidden></label>
    <button class="action" id="closeLibrary">Cerrar</button>
@@ -304,13 +299,28 @@ const $=id=>document.getElementById(id);
 const DPR=Math.min(window.devicePixelRatio||1,2);
 
 /* =====================================================================
-   LIBRO PRECARGADOS DESDE GITHUB
-   Sube tu PDF, tu música y tu imagen de fondo a un repositorio de GitHub
-   y pega aquí los links "raw" de cada archivo (botón "Raw" en GitHub, o
-   con el formato https://raw.githubusercontent.com/usuario/repo/rama/archivo.ext).
-   Cada libro de esta lista aparecerá en la biblioteca: al abrirlo se
-   cargará automáticamente su música y su fondo, sin tocar nada más.
-   Puedes dejar audioUrl o bgUrl vacíos ("") si no aplican.
+   FONDO POR DEFECTO
+   Pega aquí un link directo a una imagen (por ejemplo un link "raw" de
+   GitHub) para usarla como fondo general del lector. Se aplica siempre
+   que no estés dentro de un libro precargado que traiga su propio fondo
+   (ver bgUrl en PRESET_BOOKS más abajo). Déjalo vacío ("") para no usar
+   ningún fondo por defecto.
+===================================================================== */
+const DEFAULT_BG="";
+
+/* =====================================================================
+   LIBROS PRECARGADOS DESDE GITHUB
+   1) Sube tu PDF, tu música (mp3) y tu imagen de fondo a un repositorio
+      de GitHub (puede ser público, no hace falta que sea de pago).
+   2) Abre cada archivo en GitHub y copia el link del botón "Raw" (o
+      arma el link con este formato):
+      https://raw.githubusercontent.com/TU-USUARIO/TU-REPO/main/archivo.ext
+   3) Pega esos 3 links en un objeto como el de ejemplo de abajo y
+      quita las "//" para activarlo. Puedes agregar tantos libros como
+      quieras, uno por objeto, separados por coma.
+   Al abrir uno de estos libros desde la biblioteca, se carga el PDF,
+   se pone su música y se aplica su fondo automáticamente.
+   audioUrl y bgUrl pueden dejarse en "" si un libro no los necesita.
 ===================================================================== */
 const PRESET_BOOKS=[
  // { id:"heidys-juan", name:"Heidys & Juan — 14.10.2024",
@@ -319,7 +329,8 @@ const PRESET_BOOKS=[
  //   bgUrl:"https://raw.githubusercontent.com/usuario/repo/main/fondo.jpg" },
 ];
 
-let pdf=null, N=0, orientation="portrait";
+let pdf=null, N=0;
+const orientation="landscape"; // el lector ahora funciona solo en formato horizontal (libro abierto)
 let views=[], viewIndex=0;
 let autoTimer=null, autoRunning=false;
 let uiOpen=false, hideTimer=null, musicURL=null, currentBookId=null, currentPresetId=null;
@@ -329,7 +340,7 @@ let presetDocCache=new Map();
 let resizeTimer=null;
 
 /* ---------------- storage (IndexedDB: books + settings) ---------------- */
-const DB="bookleaf-v4", STORE="books", SETTINGS="settings";
+const DB="bookleaf-v5", STORE="books", SETTINGS="settings";
 function dbOpen(){
  return new Promise((resolve,reject)=>{
   const r=indexedDB.open(DB,1);
@@ -366,19 +377,11 @@ async function dbDelete(store,key){
  });
 }
 
-/* ---------------- background image ---------------- */
-async function loadBg(){
- try{ const rec=await dbGet(SETTINGS,"bg"); if(rec&&rec.value) applyBg(rec.value,false) }catch(e){}
-}
-function applyBg(url,persist=true){
+/* ---------------- background image (code-defined only) ---------------- */
+function applyBg(url,persist=false){
+ if(!url){ $("bgImage").classList.remove("on"); $("bgImage").style.backgroundImage=""; return }
  $("bgImage").style.backgroundImage=`url("${url}")`;
  $("bgImage").classList.add("on");
- if(persist) dbPut(SETTINGS,{key:"bg",value:url});
-}
-function clearBg(){
- $("bgImage").classList.remove("on");
- $("bgImage").style.backgroundImage="";
- dbPut(SETTINGS,{key:"bg",value:""});
 }
 
 function toast(t){
@@ -387,19 +390,13 @@ function toast(t){
 }
 
 /* ---------------- "view" model -----------------
-   Portrait: every page is its own single view.
-   Landscape: page 1 and the last page are always treated as covers and
-   shown ALONE, exactly like a real book closes and opens. Everything in
-   between is paired into spreads; if that interior has an odd number of
-   pages, one blank leaf is added (like a printer's filler page) so the
-   pairing always comes out even and the covers stay solo. */
-function buildViews(o,total){
+   Page 1 and the last page are always treated as covers and shown ALONE.
+   Everything in between is paired into spreads; if that interior has an
+   odd number of pages, one blank leaf is added so the pairing always
+   comes out even and the covers stay solo — like a real book. */
+function buildViews(total){
  const v=[];
  if(total<=0) return v;
- if(o==="portrait"){
-  for(let p=1;p<=total;p++) v.push({type:"single",page:p});
-  return v;
- }
  if(total===1){ v.push({type:"single",page:1}); return v }
  const first=1,last=total;
  const interior=[];
@@ -459,8 +456,12 @@ function drawEntry(entry,canvas){
 }
 function slotSize(){
  const area=$("bookArea");
- if(orientation==="landscape") return {maxW:area.clientWidth*.43,maxH:area.clientHeight*.86};
- return {maxW:area.clientWidth*.8,maxH:area.clientHeight*.9};
+ return {maxW:area.clientWidth*.43,maxH:area.clientHeight*.86};
+}
+async function warmView(view,maxW,maxH){
+ if(!view) return;
+ if(view.type==="spread") await Promise.all([getPageCanvas(view.left,maxW,maxH),getPageCanvas(view.right,maxW,maxH)]);
+ else await getPageCanvas(view.page,maxW,maxH);
 }
 function updateStacks(view){
  const leftP=view.type==="single"?view.page:view.left;
@@ -500,18 +501,14 @@ async function render(){
 }
 function prefetchAround(){
  const {maxW,maxH}=slotSize();
- for(const off of [-1,1]){
-  const v=views[viewIndex+off];
-  if(!v) continue;
-  if(v.type==="spread"){ getPageCanvas(v.left,maxW,maxH); getPageCanvas(v.right,maxW,maxH) }
-  else getPageCanvas(v.page,maxW,maxH);
- }
+ warmView(views[viewIndex-1],maxW,maxH);
+ warmView(views[viewIndex+1],maxW,maxH);
 }
 function saveProgress(){
  if(!views[viewIndex]) return;
  const page=primaryPageOf(views[viewIndex]);
- if(currentBookId) dbPut(STORE,{id:currentBookId,name:$("title").textContent,blob:window._bookBlob,page,orientation});
- else if(currentPresetId) dbPut(SETTINGS,{key:"preset:"+currentPresetId,value:{page,orientation}});
+ if(currentBookId) dbPut(STORE,{id:currentBookId,name:$("title").textContent,blob:window._bookBlob,page});
+ else if(currentPresetId) dbPut(SETTINGS,{key:"preset:"+currentPresetId,value:{page}});
 }
 
 let turning=false;
@@ -525,7 +522,16 @@ async function turn(dir){
  let frontPage,backPage;
  if(dir>0){ frontPage=rightPageOf(curView); backPage=leftPageOf(nextView)||rightPageOf(nextView) }
  else { frontPage=leftPageOf(curView)||rightPageOf(curView); backPage=rightPageOf(nextView) }
- const [fe,be]=await Promise.all([getPageCanvas(frontPage,maxW,maxH),getPageCanvas(backPage,maxW,maxH)]);
+ // Warm up EVERYTHING the landing view will need (not just the curling
+ // faces) before the animation even starts, so the swap after the curl
+ // is instantaneous — no flash of the old spread, no delayed collapse
+ // into a single cover.
+ await Promise.all([
+  getPageCanvas(frontPage,maxW,maxH),
+  getPageCanvas(backPage,maxW,maxH),
+  warmView(nextView,maxW,maxH)
+ ]);
+ const fe=await getPageCanvas(frontPage,maxW,maxH), be=await getPageCanvas(backPage,maxW,maxH);
  drawEntry(fe,$("turnFront"));drawEntry(be,$("turnBack"));
  const t=$("turnPage");
  t.classList.remove("active","reverse");void t.offsetWidth;
@@ -548,7 +554,7 @@ function startAuto(){
 function toggleAuto(){autoRunning?stopAuto():startAuto()}
 
 /* ---------------- opening local files ---------------- */
-async function openPDF(file,id=null,storedPage=1,storedOrientation=null){
+async function openPDF(file,id=null,storedPage=1){
  if(!file) return;
  $("loading").style.display="block";
  try{
@@ -556,13 +562,12 @@ async function openPDF(file,id=null,storedPage=1,storedOrientation=null){
   pdf=await pdfjsLib.getDocument({data}).promise;
   N=pdf.numPages;
   window._bookBlob=file;currentBookId=id||crypto.randomUUID();currentPresetId=null;
-  if(storedOrientation) orientation=storedOrientation;
   pageCache.clear();
-  views=buildViews(orientation,N);
+  views=buildViews(N);
   viewIndex=findViewIndexForPage(storedPage||1);
   $("title").textContent=file.name;
-  $("orientation").textContent=orientation==="portrait"?"↕":"↔";
   $("startScreen").style.display="none";$("library").classList.remove("open");
+  applyBg(DEFAULT_BG); // reset any preset background left over from a previous book
   await render();
  }catch(e){ console.error(e); toast("No se pudo abrir el PDF") }
  $("loading").style.display="none";
@@ -570,7 +575,7 @@ async function openPDF(file,id=null,storedPage=1,storedOrientation=null){
 async function addToLibrary(file){
  if(!file) return;
  const id=crypto.randomUUID();
- await dbPut(STORE,{id,name:file.name,blob:file,page:1,orientation:"portrait"});
+ await dbPut(STORE,{id,name:file.name,blob:file,page:1});
  await showLibrary();toast("Libro añadido a la biblioteca");
 }
 
@@ -589,12 +594,10 @@ async function openPreset(preset){
   N=pdf.numPages;
   window._bookBlob=null;currentBookId=null;currentPresetId=preset.id||preset.pdfUrl;
   const saved=await dbGet(SETTINGS,"preset:"+currentPresetId);
-  orientation=(saved&&saved.value&&saved.value.orientation)||orientation;
   pageCache.clear();
-  views=buildViews(orientation,N);
+  views=buildViews(N);
   viewIndex=(saved&&saved.value)?findViewIndexForPage(saved.value.page||1):0;
   $("title").textContent=preset.name||"Libro";
-  $("orientation").textContent=orientation==="portrait"?"↕":"↔";
   $("startScreen").style.display="none";$("library").classList.remove("open");
   await render();
   if(preset.audioUrl){
@@ -602,7 +605,7 @@ async function openPreset(preset){
    $("audio").src=preset.audioUrl;$("audio").volume=Number($("volume").value);
    $("audio").play().catch(()=>toast("Pulsa música para iniciar"));
   }
-  if(preset.bgUrl) applyBg(preset.bgUrl,false);
+  applyBg(preset.bgUrl||DEFAULT_BG);
  }catch(e){ console.error(e); toast("No se pudo cargar el libro (revisa los links en el código)") }
  $("loading").style.display="none";
 }
@@ -637,7 +640,7 @@ async function showLibrary(){
   const rm=document.createElement("button");rm.className="removeBook";rm.textContent="×";
   rm.onclick=async e=>{e.stopPropagation();await dbDelete(STORE,b.id);showLibrary()};
   card.append(cover,nm,rm);
-  card.onclick=()=>openPDF(b.blob,b.id,b.page||1,b.orientation);
+  card.onclick=()=>openPDF(b.blob,b.id,b.page||1);
   $("books").appendChild(card);
   const bytes=new Uint8Array(await b.blob.arrayBuffer());
   renderThumb(c,bytes);
@@ -645,17 +648,7 @@ async function showLibrary(){
  $("library").classList.add("open");
 }
 
-/* ---------------- orientation / zoom / night ---------------- */
-function setOrientation(o){
- if(o===orientation||!pdf){ orientation=o; return }
- const curPage=views[viewIndex]?primaryPageOf(views[viewIndex]):1;
- orientation=o;
- views=buildViews(orientation,N);
- viewIndex=findViewIndexForPage(curPage);
- $("orientation").textContent=o==="portrait"?"↕":"↔";
- pageCache.clear();
- render();
-}
+/* ---------------- zoom / night ---------------- */
 function setZoom(z){
  zoom=Math.max(1,Math.min(2.5,z));$("zoomRange").value=zoom;
  $("zoomText").textContent=Math.round(zoom*100)+"%";
@@ -709,7 +702,6 @@ $("audioPlay").onclick=()=>{
 $("audio").addEventListener("play",()=>{$("audioPlay").textContent="❚❚";$("music").classList.add("on")});
 $("audio").addEventListener("pause",()=>{$("audioPlay").textContent="♫";$("music").classList.remove("on")});
 $("volume").oninput=e=>$("audio").volume=Number(e.target.value);
-$("orientation").onclick=()=>setOrientation(orientation==="portrait"?"landscape":"portrait");
 $("night").onclick=()=>applyNight(!$("app").classList.contains("night"));
 $("nightSwitch").onchange=e=>applyNight(e.target.checked);
 $("auto").onclick=toggleAuto;
@@ -723,8 +715,6 @@ $("next").onclick=next;$("next2").onclick=next;$("prev").onclick=prev;$("prev2")
 $("first").onclick=async()=>{stopAuto();viewIndex=0;await render()};
 $("last").onclick=async()=>{stopAuto();viewIndex=views.length-1;await render()};
 $("progress").oninput=async e=>{stopAuto();viewIndex=Number(e.target.value);await render()};
-$("applyBg").onclick=()=>{ const url=$("bgUrlInput").value.trim(); if(url) applyBg(url); };
-$("clearBg").onclick=()=>{ $("bgUrlInput").value=""; clearBg() };
 
 document.addEventListener("keydown",e=>{
  if(e.key==="ArrowRight"||e.key==="PageDown") next();
@@ -763,9 +753,7 @@ window.addEventListener("resize",()=>{
 });
 
 /* ---------------- init ---------------- */
-loadBg();
-orientation=window.innerWidth>window.innerHeight?"landscape":"portrait";
-$("orientation").textContent=orientation==="portrait"?"↕":"↔";
+applyBg(DEFAULT_BG);
 </script>
 </div>
 </body>
