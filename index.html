@@ -3,178 +3,212 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>BookLeaf Reader — V2</title>
+<title>BookLeaf Reader — V3</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module"></script>
 
 <style>
 :root{
-  --ui:rgba(0,0,0,.22);
-  --ui2:rgba(0,0,0,.38);
   --txt:#fff;
-  --paper:#eee;
-  --bg:#111;
+  --txt-dim:rgba(255,255,255,.62);
+  --paper:#eeece5;
+  --accent:linear-gradient(135deg,#0A84FF,#5E5CE6);
+  --accent-solid:#5E5CE6;
+  --glass-1:rgba(255,255,255,.16);
+  --glass-2:rgba(255,255,255,.06);
+  --glass-border:rgba(255,255,255,.22);
+  --radius-lg:26px;
+  --radius-md:18px;
+  --radius-sm:12px;
 }
 *{box-sizing:border-box}
-html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050505;color:var(--txt);font-family:Arial,sans-serif}
-button,input{font:inherit}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:var(--txt);
+  font-family:-apple-system,"SF Pro Display",Inter,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+button,input,select{font:inherit}
 button{border:0;background:transparent;color:#fff;cursor:pointer}
-#app{
-  width:100%;height:100%;position:relative;overflow:hidden;
-  background:radial-gradient(circle at 50% 45%,#3a3a3a 0,#171717 48%,#050505 100%);
-  transition:background .3s
+
+#app{width:100%;height:100%;position:relative;overflow:hidden;background:#0b0b0e}
+#bgImage{position:absolute;inset:-40px;z-index:0;background-size:cover;background-position:center;
+  filter:blur(42px) brightness(.5) saturate(1.25);transform:scale(1.1);opacity:0;transition:opacity .5s}
+#bgImage.on{opacity:1}
+#ambient{position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(circle at 50% 42%,rgba(255,255,255,.06) 0,transparent 55%)}
+#app.night #ambient{background:radial-gradient(circle at 50% 42%,rgba(255,255,255,.02) 0,transparent 55%)}
+#app.night #bgImage{filter:blur(42px) brightness(.28) saturate(1)}
+
+/* ---------- glass base ---------- */
+.glass{
+  background:linear-gradient(155deg,var(--glass-1),var(--glass-2));
+  backdrop-filter:blur(26px) saturate(190%);
+  -webkit-backdrop-filter:blur(26px) saturate(190%);
+  border:1px solid var(--glass-border);
+  box-shadow:0 10px 34px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.22);
 }
-#app.night{background:#000}
-#reader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;perspective:1800px}
-#bookArea{
-  width:100%;height:100%;display:flex;align-items:center;justify-content:center;
-  padding:50px 55px 70px;overflow:hidden;touch-action:none;
+.glassBtn{
+  width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:17px;opacity:.85;transition:.18s;
 }
-#book{
-  position:relative;display:flex;align-items:stretch;justify-content:center;
-  transform-style:preserve-3d;transition:filter .25s;
-  filter:drop-shadow(0 22px 34px rgba(0,0,0,.5));
-  user-select:none
-}
-.page{
-  position:relative;overflow:hidden;background:var(--paper);
-  box-shadow:0 10px 30px rgba(0,0,0,.38);
-  transition:filter .25s
-}
+.glassBtn:hover{opacity:1;background:rgba(255,255,255,.12);transform:scale(1.06)}
+.glassBtn:active{transform:scale(.94)}
+.glassBtn.on{background:var(--accent);opacity:1;box-shadow:0 4px 14px rgba(94,92,230,.5)}
+
+/* ---------- reader ---------- */
+#reader{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;perspective:2200px}
+#bookArea{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  padding:96px 70px 118px;overflow:hidden;touch-action:none}
+#zoomLayer{transition:transform .18s ease-out;transform-origin:center center}
+#book{position:relative;display:flex;align-items:stretch;justify-content:center;
+  transform-style:preserve-3d;user-select:none}
+
+.page{position:relative;overflow:hidden;background:var(--paper);border-radius:3px;
+  box-shadow:0 18px 46px rgba(0,0,0,.45)}
 .page canvas{display:block;width:100%;height:100%;object-fit:contain}
+.page:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:2;
+  background:linear-gradient(90deg,rgba(255,255,255,.12),transparent 8%,transparent 90%,rgba(0,0,0,.14))}
+.page:after{content:"";position:absolute;inset:0;pointer-events:none;z-index:1;opacity:.5;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/></svg>")}
 #leftPage{border-radius:5px 0 0 5px}
 #rightPage{border-radius:0 5px 5px 0}
-.portrait #leftPage{display:none}
-.portrait #rightPage{border-radius:6px}
-.page:before{content:"";position:absolute;inset:0;pointer-events:none;z-index:2;background:linear-gradient(90deg,rgba(255,255,255,.10),transparent 8%,transparent 90%,rgba(0,0,0,.12))}
-#leftPage:after,#rightPage:after{content:"";position:absolute;top:0;width:30px;height:100%;pointer-events:none;z-index:3}
-#leftPage:after{right:0;background:linear-gradient(90deg,transparent,rgba(0,0,0,.20))}
-#rightPage:after{left:0;background:linear-gradient(90deg,rgba(0,0,0,.20),transparent)}
+#book.singleView #leftPage{display:none}
+#book.singleView #rightPage{border-radius:6px}
 
-#turnPage{
-  position:absolute;z-index:15;top:0;right:0;display:none;
-  transform-style:preserve-3d;transform-origin:left center;pointer-events:none;
-}
-#turnPage.active{display:block;animation:curl .75s cubic-bezier(.2,.7,.2,1) forwards}
-.turnFace{
-  position:absolute;inset:0;overflow:hidden;background:var(--paper);
-  backface-visibility:hidden;box-shadow:0 10px 28px rgba(0,0,0,.38)
-}
+#spine{position:absolute;top:0;bottom:0;left:50%;width:34px;margin-left:-17px;z-index:4;pointer-events:none;
+  background:linear-gradient(90deg,transparent,rgba(0,0,0,.28) 45%,rgba(0,0,0,.28) 55%,transparent);opacity:0;transition:opacity .2s}
+#book:not(.singleView) #spine{opacity:1}
+
+.stack{position:absolute;top:8px;bottom:8px;width:2px;border-radius:2px;opacity:0;transition:width .25s,opacity .25s;
+  background:repeating-linear-gradient(180deg,#d9d4c8 0 2px,#c4bfae 2px 3px);box-shadow:0 3px 8px rgba(0,0,0,.35);z-index:1}
+#stackLeft{left:-9px}
+#stackRight{right:-9px}
+
+#turnPage{position:absolute;z-index:15;top:0;right:0;display:none;transform-style:preserve-3d;
+  transform-origin:left center;pointer-events:none}
+#turnPage.active{display:block;animation:curl .68s cubic-bezier(.22,.7,.2,1) forwards}
+#turnPage.reverse{left:0;right:auto;transform-origin:right center}
+#turnPage.reverse.active{animation:curlBack .68s cubic-bezier(.22,.7,.2,1) forwards}
+.turnFace{position:absolute;inset:0;overflow:hidden;background:var(--paper);backface-visibility:hidden;
+  box-shadow:0 14px 34px rgba(0,0,0,.4);border-radius:3px}
 .turnFace canvas{width:100%;height:100%;object-fit:contain}
 .turnBack{transform:rotateY(180deg)}
 @keyframes curl{
-  0%{transform:rotateY(0deg) rotateZ(0deg);box-shadow:0 10px 20px rgba(0,0,0,.1)}
-  35%{transform:rotateY(-78deg) rotateZ(-1deg);box-shadow:20px 8px 30px rgba(0,0,0,.42)}
-  100%{transform:rotateY(-180deg) rotateZ(0deg);box-shadow:0 10px 20px rgba(0,0,0,.1)}
+  0%{transform:rotateY(0deg);box-shadow:0 10px 20px rgba(0,0,0,.1)}
+  38%{transform:rotateY(-82deg);box-shadow:26px 10px 34px rgba(0,0,0,.45)}
+  100%{transform:rotateY(-180deg);box-shadow:0 10px 20px rgba(0,0,0,.1)}
+}
+@keyframes curlBack{
+  0%{transform:rotateY(0deg);box-shadow:0 10px 20px rgba(0,0,0,.1)}
+  38%{transform:rotateY(82deg);box-shadow:-26px 10px 34px rgba(0,0,0,.45)}
+  100%{transform:rotateY(180deg);box-shadow:0 10px 20px rgba(0,0,0,.1)}
 }
 
-#corner{
-  position:absolute;z-index:30;right:0;bottom:0;width:75px;height:75px;
-  cursor:pointer;opacity:.0;transition:.2s
-}
-#corner:hover{opacity:.25;background:linear-gradient(135deg,transparent 48%,#fff 50%,transparent 52%)}
-#corner.left{left:0;right:auto}
-#cornerHint{position:absolute;z-index:31;right:5px;bottom:5px;font-size:10px;opacity:.28;pointer-events:none}
+/* dog-ear fold hint, permanent + subtle */
+#corner{position:absolute;z-index:30;right:0;bottom:0;width:0;height:0;cursor:pointer;
+  border-style:solid;border-width:0 0 34px 34px;border-color:transparent transparent rgba(255,255,255,.16) transparent;
+  transition:.2s;filter:drop-shadow(0 -2px 4px rgba(0,0,0,.25))}
+#corner:hover{border-width:0 0 46px 46px;border-color:transparent transparent rgba(255,255,255,.32) transparent}
+#corner.left{left:0;right:auto;border-width:0 34px 34px 0;border-color:transparent transparent transparent transparent}
+#corner.left:hover{border-width:0 46px 46px 0}
 
-.ui{
-  position:absolute;z-index:80;left:0;right:0;display:flex;align-items:center;justify-content:space-between;
-  padding:8px 14px;transition:opacity .35s,transform .35s;pointer-events:none
-}
-.ui>*{pointer-events:auto}
-#topBar{top:0;background:linear-gradient(#0008,transparent)}
-#bottomBar{bottom:0;background:linear-gradient(transparent,#0009);padding-bottom:max(10px,env(safe-area-inset-bottom))}
-#leftControls,#rightControls,#navControls,#readControls{display:flex;align-items:center;gap:2px}
-.ui button{font-size:23px;padding:7px 10px;text-shadow:0 1px 5px #000;opacity:.65}
-.ui button:hover{opacity:1;transform:scale(1.08)}
-#title{font-size:14px;opacity:.78;max-width:35vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#pageInfo{font-size:12px;opacity:.75;min-width:85px;text-align:center}
-#progress{width:190px;max-width:24vw;accent-color:white}
-#progress::-webkit-slider-runnable-track{height:3px;background:#fff6}
-#progress::-webkit-slider-thumb{width:10px;height:10px;margin-top:-3.5px}
-#volume{width:70px;accent-color:white}
-#speed{
-  background:transparent;color:#fff;border:0;outline:0;opacity:.7;font-size:12px
-}
+.side{position:absolute;z-index:60;top:50%;width:64px;height:64px;transform:translateY(-50%);
+  display:flex;align-items:center;justify-content:center;font-size:26px;border-radius:50%;
+  color:#fff;opacity:0;transition:.2s}
+#bookArea:hover ~ .side,.side:hover{opacity:.9}
+.side{opacity:0}
+#reader:hover .side{opacity:.55}
+.side:hover{opacity:1;background:rgba(255,255,255,.1)}
+#prev{left:14px}#next{right:14px}
+
+/* ---------- floating UI ---------- */
+.ui{position:absolute;z-index:80;display:flex;align-items:center;gap:10px;transition:opacity .35s,transform .35s}
+.hiddenUI{opacity:0!important;pointer-events:none!important}
+#topLeft{top:16px;left:16px;border-radius:22px;padding:7px 16px 7px 8px}
+#topLeft.hiddenUI{transform:translateY(-14px)}
+#topRight{top:16px;right:16px;border-radius:22px;padding:6px 8px}
+#topRight.hiddenUI{transform:translateY(-14px)}
+#dock{left:50%;bottom:max(18px,env(safe-area-inset-bottom));transform:translateX(-50%);border-radius:28px;
+  padding:9px 16px;gap:14px;max-width:92vw}
+#dock.hiddenUI{transform:translateX(-50%) translateY(16px)}
+#title{font-size:13.5px;font-weight:500;opacity:.85;max-width:32vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#pageInfo{font-size:11.5px;color:var(--txt-dim);min-width:78px;text-align:center;font-variant-numeric:tabular-nums}
+#progress{width:170px;max-width:22vw;accent-color:#5E5CE6;height:3px}
+#volume{width:64px;accent-color:#5E5CE6}
+#speed{background:rgba(255,255,255,.08);color:#fff;border:0;outline:0;border-radius:8px;font-size:11px;padding:4px 6px}
 #speed option{color:#111}
-.hiddenUI{opacity:0!important;transform:translateY(12px);pointer-events:none!important}
-#topBar.hiddenUI{transform:translateY(-12px)}
+.dockGroup{display:flex;align-items:center;gap:6px}
+.dockDivider{width:1px;height:22px;background:rgba(255,255,255,.16)}
 
-.side{
- position:absolute;z-index:60;top:50%;width:70px;height:140px;transform:translateY(-50%);
- display:flex;align-items:center;justify-content:center;font-size:50px;opacity:.14;
- text-shadow:0 1px 6px #000;transition:.2s
-}
-.side:hover{opacity:.65;transform:translateY(-50%) scale(1.04)}
-#prev{left:0}#next{right:0}
+#startScreen,#library{position:absolute;z-index:200;inset:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:center;text-align:center;background:rgba(0,0,0,.5);backdrop-filter:blur(10px);padding:24px}
+#startScreen .card{padding:34px 30px;border-radius:30px;max-width:560px}
+#startScreen h1{font-size:26px;font-weight:600;margin:0 0 10px;letter-spacing:-.02em}
+#startScreen p{opacity:.68;line-height:1.55;font-size:14px;margin:0 0 20px}
+.action{padding:11px 18px;border-radius:16px;background:rgba(255,255,255,.1);border:1px solid var(--glass-border);
+  color:#fff;margin:5px;cursor:pointer;font-size:13.5px;transition:.15s}
+.action:hover{background:rgba(255,255,255,.18);transform:translateY(-1px)}
+.action.primary{background:var(--accent);border:0}
 
-#startScreen,#library{
- position:absolute;z-index:200;inset:0;display:flex;flex-direction:column;align-items:center;
- justify-content:center;text-align:center;background:rgba(0,0,0,.82);backdrop-filter:blur(7px);padding:24px
-}
-#startScreen h1{font-size:30px;font-weight:400;margin:0 0 8px}
-#startScreen p{opacity:.7;max-width:580px;line-height:1.5}
-.action{
- padding:12px 19px;border:1px solid #fff7;border-radius:9px;background:#fff1;color:#fff;
- margin:5px;cursor:pointer
-}
-.action:hover{background:#fff2}
 #library{display:none;align-items:stretch;justify-content:flex-start}
 #library.open{display:flex}
-.libraryHead{width:100%;display:flex;justify-content:space-between;align-items:center;max-width:1000px}
-.libraryHead h2{font-weight:400}
-#books{
- width:100%;max-width:1000px;display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));
- gap:16px;overflow:auto;padding:15px
-}
-.bookCard{
- min-height:205px;background:#fff1;border:1px solid #fff2;border-radius:10px;overflow:hidden;
- cursor:pointer;position:relative;text-align:left
-}
-.bookCard:hover{background:#fff2}
-.cover{height:165px;background:#222;display:flex;align-items:center;justify-content:center;overflow:hidden}
-.cover canvas{max-width:100%;max-height:100%;object-fit:contain}
-.bookName{font-size:12px;padding:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.removeBook{position:absolute;right:3px;top:3px;background:#0009!important;border-radius:50%;font-size:16px!important;padding:3px 7px!important}
-#loading{position:absolute;z-index:250;display:none;background:#000b;padding:12px 18px;border-radius:8px;font-size:13px}
-#toast{position:absolute;z-index:260;left:50%;bottom:75px;transform:translateX(-50%);background:#000b;padding:9px 15px;border-radius:8px;font-size:12px;opacity:0;transition:.3s;pointer-events:none}
+.libraryHead{width:100%;display:flex;justify-content:space-between;align-items:center;gap:14px;
+  max-width:1040px;flex-wrap:wrap;padding:0 6px}
+.libraryHead h2{font-weight:600;font-size:19px;margin:0;letter-spacing:-.01em}
+#bgUrlRow{display:flex;align-items:center;gap:6px;border-radius:16px;padding:6px 10px;flex:1;min-width:230px;max-width:420px}
+#bgUrlInput{flex:1;background:transparent;border:0;outline:0;color:#fff;font-size:12.5px;min-width:0}
+#bgUrlInput::placeholder{color:rgba(255,255,255,.4)}
+#books{width:100%;max-width:1040px;display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));
+  gap:16px;overflow:auto;padding:18px 6px}
+.bookCard{min-height:212px;border-radius:18px;overflow:hidden;cursor:pointer;position:relative;text-align:left;
+  transition:.18s;background:linear-gradient(155deg,rgba(255,255,255,.1),rgba(255,255,255,.03));
+  border:1px solid rgba(255,255,255,.14)}
+.bookCard:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.3)}
+.cover{height:168px;background:#1c1c20;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.cover canvas{max-width:100%;max-height:100%;object-fit:contain;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+.bookName{font-size:12px;padding:9px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.85}
+.removeBook{position:absolute;right:5px;top:5px;background:rgba(0,0,0,.55)!important;border-radius:50%;
+  font-size:15px!important;width:24px;height:24px;display:flex;align-items:center;justify-content:center}
+
+#loading,#toast{position:absolute;z-index:250;padding:11px 18px;border-radius:16px;font-size:12.5px}
+#loading{display:none}
+#toast{left:50%;bottom:96px;transform:translateX(-50%);opacity:0;transition:.3s;pointer-events:none}
 #toast.show{opacity:1}
 
-#settings{
- position:absolute;z-index:120;right:12px;top:48px;width:245px;padding:14px;border-radius:12px;
- background:#000b;backdrop-filter:blur(10px);display:none
-}
+#settings{position:absolute;z-index:120;right:16px;top:66px;width:255px;padding:16px;border-radius:22px;display:none}
 #settings.open{display:block}
-.setting{display:flex;justify-content:space-between;align-items:center;padding:9px 0;font-size:12px}
-.setting input[type=range]{width:100px;accent-color:white}
-.switch{accent-color:white}
+.setting{display:flex;justify-content:space-between;align-items:center;padding:9px 0;font-size:12.5px;gap:10px}
+.setting input[type=range]{width:96px;accent-color:#5E5CE6}
+.switch{accent-color:#5E5CE6;width:36px;height:20px}
 
-#zoomLayer{transition:transform .15s;transform-origin:center center}
 @media(max-width:700px){
- #bookArea{padding:38px 8px 58px}
- .side{width:40px;font-size:36px}
- #title{display:none}
- #progress{max-width:28vw}
- #volume{width:50px}
- #books{grid-template-columns:repeat(auto-fill,minmax(115px,1fr))}
- .cover{height:135px}
+  #bookArea{padding:80px 10px 96px}
+  .side{width:44px;height:44px;font-size:22px}
+  #title{display:none}
+  #progress{max-width:26vw}
+  #volume{width:46px}
+  #books{grid-template-columns:repeat(auto-fill,minmax(118px,1fr))}
+  .cover{height:138px}
+  #dock{gap:8px;padding:8px 10px}
 }
 </style>
 </head>
 
 <body>
 <div id="app">
+<div id="bgImage"></div>
+<div id="ambient"></div>
 
 <div id="reader">
   <div id="bookArea">
     <div id="zoomLayer">
-      <div id="book" class="portrait">
+      <div id="book" class="singleView">
+        <div class="stack" id="stackLeft"></div>
         <div class="page" id="leftPage"><canvas id="leftCanvas"></canvas></div>
+        <div id="spine"></div>
         <div class="page" id="rightPage"><canvas id="rightCanvas"></canvas></div>
+        <div class="stack" id="stackRight"></div>
         <div id="turnPage">
           <div class="turnFace"><canvas id="turnFront"></canvas></div>
           <div class="turnFace turnBack"><canvas id="turnBack"></canvas></div>
         </div>
         <div id="corner"></div>
-        <div id="cornerHint">↗</div>
       </div>
     </div>
   </div>
@@ -182,36 +216,37 @@ button{border:0;background:transparent;color:#fff;cursor:pointer}
   <button class="side" id="next">›</button>
 </div>
 
-<div class="ui" id="topBar">
- <div id="leftControls">
-   <button id="menu" title="Controles">☰</button>
-   <span id="title">Mi libro</span>
- </div>
- <div id="rightControls">
-   <button id="libraryBtn" title="Biblioteca">▦</button>
-   <button id="orientation" title="Orientación">↕</button>
-   <button id="night" title="Modo nocturno">☾</button>
-   <button id="auto" title="Lectura automática">▶</button>
-   <button id="music" title="Música">♫</button>
-   <button id="settingsBtn" title="Ajustes">⚙</button>
-   <button id="fullscreen" title="Pantalla completa">⛶</button>
-   <button id="open" title="Abrir PDF">📄</button>
- </div>
+<div class="ui glass" id="topLeft">
+ <button class="glassBtn" id="menu" title="Controles">☰</button>
+ <span id="title">Mi libro</span>
 </div>
 
-<div class="ui" id="bottomBar">
- <div id="navControls">
-   <button id="first" title="Primera página">|‹</button>
-   <button id="prev2">‹</button>
-   <button id="next2">›</button>
-   <button id="last" title="Última página">›|</button>
+<div class="ui glass" id="topRight">
+ <button class="glassBtn" id="libraryBtn" title="Biblioteca">▦</button>
+ <button class="glassBtn" id="orientation" title="Orientación">↕</button>
+ <button class="glassBtn" id="night" title="Modo nocturno">☾</button>
+ <button class="glassBtn" id="auto" title="Lectura automática">▶</button>
+ <button class="glassBtn" id="music" title="Música">♫</button>
+ <button class="glassBtn" id="settingsBtn" title="Ajustes">⚙</button>
+ <button class="glassBtn" id="fullscreen" title="Pantalla completa">⛶</button>
+ <button class="glassBtn" id="open" title="Abrir PDF">📄</button>
+</div>
+
+<div class="ui glass" id="dock">
+ <div class="dockGroup">
+   <button class="glassBtn" id="first" title="Primera página">|‹</button>
+   <button class="glassBtn" id="prev2">‹</button>
+   <button class="glassBtn" id="next2">›</button>
+   <button class="glassBtn" id="last" title="Última página">›|</button>
  </div>
- <div id="readControls">
+ <div class="dockDivider"></div>
+ <div class="dockGroup">
    <span id="pageInfo">0 / 0</span>
-   <input id="progress" type="range" min="1" max="1" value="1">
+   <input id="progress" type="range" min="0" max="0" value="0">
  </div>
- <div id="readControls">
-   <button id="audioPlay" title="Reproducir/pausar música">♫</button>
+ <div class="dockDivider"></div>
+ <div class="dockGroup">
+   <button class="glassBtn" id="audioPlay" title="Reproducir/pausar música">♫</button>
    <input id="volume" type="range" min="0" max="1" step=".01" value=".7">
    <select id="speed" title="Velocidad automática">
     <option value="3000">3 s</option><option value="5000" selected>5 s</option>
@@ -222,34 +257,44 @@ button{border:0;background:transparent;color:#fff;cursor:pointer}
  </div>
 </div>
 
-<div id="settings">
+<div id="settings" class="glass">
  <div class="setting"><span>Ocultar controles automáticamente</span><input id="hideControls" class="switch" type="checkbox" checked></div>
  <div class="setting"><span>Modo lectura nocturna</span><input id="nightSwitch" class="switch" type="checkbox"></div>
  <div class="setting"><span>Zoom</span><input id="zoomRange" type="range" min="1" max="2.5" step=".05" value="1"></div>
  <div class="setting"><span>Velocidad automática</span><select id="speed2"><option value="3000">3 s</option><option value="5000" selected>5 s</option><option value="10000">10 s</option><option value="15000">15 s</option><option value="30000">30 s</option></select></div>
- <div style="font-size:10px;opacity:.45;margin-top:7px">Pellizca para zoom • doble clic restablece • toca las esquinas para pasar página</div>
+ <div style="font-size:10.5px;opacity:.5;margin-top:8px;line-height:1.5">Pellizca para zoom · doble clic restablece · toca las esquinas para pasar página</div>
 </div>
 
 <div id="startScreen">
- <h1>📖 BookLeaf Reader V2</h1>
- <p>Lector PDF con efecto de libro, biblioteca, portada, memoria de página, música, lectura automática, zoom, modo nocturno y pantalla completa.</p>
- <div>
-  <label class="action">📄 Abrir PDF<input id="pdfInput" type="file" accept="application/pdf" hidden></label>
-  <label class="action">🎵 Añadir música<input id="audioInput" type="file" accept="audio/*" hidden></label>
+ <div class="card glass">
+  <h1>📖 BookLeaf Reader</h1>
+  <p>Lector PDF con efecto de libro real: portada, lomo, contraportada, biblioteca, memoria de página, música y modo nocturno.</p>
+  <div>
+   <label class="action primary">📄 Abrir PDF<input id="pdfInput" type="file" accept="application/pdf" hidden></label>
+   <label class="action">🎵 Añadir música<input id="audioInput" type="file" accept="audio/*" hidden></label>
+  </div>
+  <button class="action" id="openLibrary">▦ Abrir biblioteca</button>
  </div>
- <button class="action" id="openLibrary">▦ Abrir biblioteca</button>
 </div>
 
 <div id="library">
- <div class="libraryHead"><h2>Mi biblioteca</h2><div>
-  <label class="action">＋ Añadir PDF<input id="libraryInput" type="file" accept="application/pdf" hidden></label>
-  <button class="action" id="closeLibrary">Cerrar</button>
- </div></div>
+ <div class="libraryHead">
+  <h2>Mi biblioteca</h2>
+  <div id="bgUrlRow" class="glass">
+    <input id="bgUrlInput" type="text" placeholder="Pega el link de una imagen de fondo…">
+    <button class="glassBtn" id="applyBg" title="Aplicar fondo" style="width:30px;height:30px;font-size:14px">✓</button>
+    <button class="glassBtn" id="clearBg" title="Quitar fondo" style="width:30px;height:30px;font-size:13px">✕</button>
+  </div>
+  <div>
+   <label class="action">＋ Añadir PDF<input id="libraryInput" type="file" accept="application/pdf" hidden></label>
+   <button class="action" id="closeLibrary">Cerrar</button>
+  </div>
+ </div>
  <div id="books"></div>
 </div>
 
-<div id="loading">Cargando…</div>
-<div id="toast"></div>
+<div id="loading" class="glass">Cargando…</div>
+<div id="toast" class="glass"></div>
 <audio id="audio" loop></audio>
 
 <script type="module">
@@ -257,143 +302,280 @@ import * as pdfjsLib from "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38
 pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.worker.min.mjs";
 
 const $=id=>document.getElementById(id);
-let pdf=null,current=1,orientation="portrait",autoTimer=null,autoRunning=false;
-let controlsVisible=true,hideTimer=null,musicURL=null,currentBookId=null;
-let zoom=1,touchStartX=0,touchStartY=0,pinchStart=0;
+const DPR=Math.min(window.devicePixelRatio||1,2); // capped for performance
 
-const DB="bookleaf-v2", STORE="books";
+let pdf=null, N=0, orientation="portrait";
+let views=[], viewIndex=0;
+let autoTimer=null, autoRunning=false;
+let controlsVisible=true, hideTimer=null, musicURL=null, currentBookId=null;
+let zoom=1, touchStartX=0, touchStartY=0, pinchStart=0;
+let pageCache=new Map(); // "page:w:h" -> {canvas,w,h}
+let resizeTimer=null;
 
+/* ---------------- storage (IndexedDB: books + settings) ---------------- */
+const DB="bookleaf-v3", STORE="books", SETTINGS="settings";
 function dbOpen(){
  return new Promise((resolve,reject)=>{
-  const r=indexedDB.open(DB,1);
-  r.onupgradeneeded=()=>r.result.createObjectStore(STORE,{keyPath:"id"});
+  const r=indexedDB.open(DB,2);
+  r.onupgradeneeded=()=>{
+   const db=r.result;
+   if(!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE,{keyPath:"id"});
+   if(!db.objectStoreNames.contains(SETTINGS)) db.createObjectStore(SETTINGS,{keyPath:"key"});
+  };
   r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error);
  });
 }
-async function dbPut(book){
+async function dbPut(store,val){
  const db=await dbOpen(); return new Promise((res,rej)=>{
-  const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).put(book);
+  const tx=db.transaction(store,"readwrite");tx.objectStore(store).put(val);
   tx.oncomplete=res;tx.onerror=()=>rej(tx.error);
  });
 }
-async function dbAll(){
+async function dbAll(store){
  const db=await dbOpen(); return new Promise((res,rej)=>{
-  const tx=db.transaction(STORE,"readonly");const r=tx.objectStore(STORE).getAll();
+  const tx=db.transaction(store,"readonly");const r=tx.objectStore(store).getAll();
   r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);
  });
 }
-async function dbDelete(id){
+async function dbGet(store,key){
  const db=await dbOpen(); return new Promise((res,rej)=>{
-  const tx=db.transaction(STORE,"readwrite");tx.objectStore(STORE).delete(id);
+  const tx=db.transaction(store,"readonly");const r=tx.objectStore(store).get(key);
+  r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);
+ });
+}
+async function dbDelete(store,key){
+ const db=await dbOpen(); return new Promise((res,rej)=>{
+  const tx=db.transaction(store,"readwrite");tx.objectStore(store).delete(key);
   tx.oncomplete=res;tx.onerror=()=>rej(tx.error);
  });
 }
 
+/* ---------------- background image ---------------- */
+async function loadBg(){
+ try{
+  const rec=await dbGet(SETTINGS,"bg");
+  if(rec&&rec.value) applyBg(rec.value,false);
+ }catch(e){}
+}
+function applyBg(url,persist=true){
+ $("bgImage").style.backgroundImage=`url("${url}")`;
+ $("bgImage").classList.add("on");
+ if(persist) dbPut(SETTINGS,{key:"bg",value:url});
+}
+function clearBg(){
+ $("bgImage").classList.remove("on");
+ $("bgImage").style.backgroundImage="";
+ dbPut(SETTINGS,{key:"bg",value:""});
+}
+
+/* ---------------- toast / loading ---------------- */
 function toast(t){
  $("toast").textContent=t;$("toast").classList.add("show");
  clearTimeout(toast.t);toast.t=setTimeout(()=>$("toast").classList.remove("show"),1800);
 }
-function max(){return pdf?pdf.numPages:0}
-function step(){return orientation==="landscape"?2:1}
-function clamp(p){return Math.max(1,Math.min(max(),p))}
-function saveProgress(){
- if(currentBookId) dbPut({id:currentBookId,name:$("title").textContent,blob:window._bookBlob,page:current,orientation});
+
+/* ---------------- book "view" model -----------------
+   A view is either {type:'single', page:n} or {type:'spread', left:n, right:n}.
+   Portrait: every page is its own single view.
+   Landscape: page 1 is a single cover, then spreads (2,3)(4,5)…, and if the
+   last page has no partner it appears alone as the back cover — just like a
+   real book. */
+function buildViews(o,total){
+ const v=[];
+ if(total<=0) return v;
+ if(o==="portrait"){
+  for(let p=1;p<=total;p++) v.push({type:"single",page:p});
+  return v;
+ }
+ v.push({type:"single",page:1});
+ let p=2;
+ while(p<=total){
+  if(p+1<=total){ v.push({type:"spread",left:p,right:p+1}); p+=2 }
+  else { v.push({type:"single",page:p}); p+=1 }
+ }
+ return v;
 }
-async function renderPage(n,canvas,small=false){
- if(!pdf||n<1||n>pdf.numPages){canvas.width=2;canvas.height=2;return}
- const page=await pdf.getPage(n), base=page.getViewport({scale:1}), area=$("bookArea");
- let maxW,maxH;
- if(orientation==="landscape"){maxW=area.clientWidth*.43;maxH=area.clientHeight*.82}
- else {maxW=area.clientWidth*.84;maxH=area.clientHeight*.86}
- if(small){maxW=120;maxH=160}
+function rightPageOf(view){ return view.type==="single"?view.page:view.right }
+function leftPageOf(view){ return view.type==="single"?null:view.left }
+function primaryPageOf(view){ return view.type==="single"?view.page:view.left }
+function findViewIndexForPage(p){
+ for(let i=0;i<views.length;i++){
+  const v=views[i];
+  if(v.type==="single"&&v.page===p) return i;
+  if(v.type==="spread"&&(v.left===p||v.right===p)) return i;
+ }
+ return 0;
+}
+
+/* ---------------- rendering with cache ---------------- */
+async function getPageCanvas(n,maxW,maxH){
+ if(!pdf||n<1||n>N) return null;
+ const key=n+":"+Math.round(maxW/8)+":"+Math.round(maxH/8);
+ if(pageCache.has(key)) return pageCache.get(key);
+ const page=await pdf.getPage(n);
+ const base=page.getViewport({scale:1});
  const scale=Math.min(maxW/base.width,maxH/base.height);
  const vp=page.getViewport({scale});
- canvas.width=Math.ceil(vp.width*devicePixelRatio);canvas.height=Math.ceil(vp.height*devicePixelRatio);
- canvas.style.width=vp.width+"px";canvas.style.height=vp.height+"px";
- await page.render({canvasContext:canvas.getContext("2d"),viewport:vp,transform:[devicePixelRatio,0,0,devicePixelRatio,0,0]}).promise;
+ const off=document.createElement("canvas");
+ off.width=Math.ceil(vp.width*DPR);off.height=Math.ceil(vp.height*DPR);
+ await page.render({canvasContext:off.getContext("2d"),viewport:vp,transform:[DPR,0,0,DPR,0,0]}).promise;
+ const entry={canvas:off,w:vp.width,h:vp.height};
+ pageCache.set(key,entry);
+ if(pageCache.size>28){ pageCache.delete(pageCache.keys().next().value) }
+ return entry;
 }
+function drawEntry(entry,canvas){
+ if(!entry){canvas.width=2;canvas.height=2;return}
+ canvas.width=entry.canvas.width;canvas.height=entry.canvas.height;
+ canvas.style.width=entry.w+"px";canvas.style.height=entry.h+"px";
+ canvas.getContext("2d").drawImage(entry.canvas,0,0);
+}
+function slotSize(){
+ const area=$("bookArea");
+ if(orientation==="landscape") return {maxW:area.clientWidth*.43,maxH:area.clientHeight*.82};
+ return {maxW:area.clientWidth*.8,maxH:area.clientHeight*.86};
+}
+
+function updateStacks(view){
+ const before=(view.type==="single"?view.page:view.left)-1;
+ const after=N-(view.type==="single"?view.page:view.right);
+ const l=$("stackLeft"),r=$("stackRight");
+ if(before>0){ l.style.opacity=.9; l.style.width=Math.min(2+22*(before/N),24)+"px" } else l.style.opacity=0;
+ if(after>0){ r.style.opacity=.9; r.style.width=Math.min(2+22*(after/N),24)+"px" } else r.style.opacity=0;
+}
+
 async function render(){
- if(!pdf)return;
- current=clamp(current);
- if(orientation==="landscape"){
-  $("leftPage").style.display="block";$("rightPage").style.display="block";
-  await Promise.all([renderPage(current,$("leftCanvas")),renderPage(current+1,$("rightCanvas"))]);
+ if(!pdf||!views.length) return;
+ viewIndex=Math.max(0,Math.min(views.length-1,viewIndex));
+ const view=views[viewIndex];
+ const {maxW,maxH}=slotSize();
+ $("book").classList.toggle("singleView",view.type==="single");
+ if(view.type==="spread"){
+  $("leftPage").style.display="block";
+  const [le,re]=await Promise.all([getPageCanvas(view.left,maxW,maxH),getPageCanvas(view.right,maxW,maxH)]);
+  drawEntry(le,$("leftCanvas"));drawEntry(re,$("rightCanvas"));
   $("book").style.width=($("leftCanvas").clientWidth+$("rightCanvas").clientWidth)+"px";
   $("book").style.height=Math.max($("leftCanvas").clientHeight,$("rightCanvas").clientHeight)+"px";
+  $("pageInfo").textContent=view.left+"–"+view.right+" / "+N;
  }else{
-  $("leftPage").style.display="none";$("rightPage").style.display="block";
-  await renderPage(current,$("rightCanvas"));
-  $("book").style.width=$("rightCanvas").clientWidth+"px";$("book").style.height=$("rightCanvas").clientHeight+"px";
+  $("leftPage").style.display="none";
+  const re=await getPageCanvas(view.page,maxW,maxH);
+  drawEntry(re,$("rightCanvas"));
+  $("book").style.width=$("rightCanvas").clientWidth+"px";
+  $("book").style.height=$("rightCanvas").clientHeight+"px";
+  $("pageInfo").textContent=view.page+" / "+N;
  }
- $("pageInfo").textContent=orientation==="landscape"?(current+(current+1<=max()?"–"+(current+1):"")+" / "+max()):(current+" / "+max());
- $("progress").max=max();$("progress").value=current;
- $("modeLabel")?.remove();
+ $("progress").max=views.length-1;$("progress").value=viewIndex;
+ updateStacks(view);
  saveProgress();
+ prefetchAround();
 }
+function prefetchAround(){
+ const {maxW,maxH}=slotSize();
+ for(const off of [-1,1]){
+  const v=views[viewIndex+off];
+  if(!v) continue;
+  if(v.type==="spread"){ getPageCanvas(v.left,maxW,maxH); getPageCanvas(v.right,maxW,maxH) }
+  else getPageCanvas(v.page,maxW,maxH);
+ }
+}
+function saveProgress(){
+ if(currentBookId&&views[viewIndex]) dbPut(STORE,{id:currentBookId,name:$("title").textContent,
+   blob:window._bookBlob,page:primaryPageOf(views[viewIndex]),orientation});
+}
+
+let turning=false;
 async function turn(dir){
- if(!pdf)return;
- const target=clamp(current+dir*step());if(target===current)return;
- const t=$("turnPage");t.classList.remove("active");void t.offsetWidth;
- if(dir>0){await renderPage(current,$("turnFront"));await renderPage(target,$("turnBack"))}
- else{await renderPage(target,$("turnFront"));await renderPage(current,$("turnBack"))}
+ if(!pdf||turning) return;
+ const target=Math.max(0,Math.min(views.length-1,viewIndex+dir));
+ if(target===viewIndex) return;
+ turning=true;
+ const curView=views[viewIndex], nextView=views[target];
+ const {maxW,maxH}=slotSize();
+ let frontPage,backPage;
+ if(dir>0){ frontPage=rightPageOf(curView); backPage=leftPageOf(nextView)||rightPageOf(nextView) }
+ else { frontPage=leftPageOf(curView)||rightPageOf(curView); backPage=rightPageOf(nextView) }
+ const [fe,be]=await Promise.all([getPageCanvas(frontPage,maxW,maxH),getPageCanvas(backPage,maxW,maxH)]);
+ drawEntry(fe,$("turnFront"));drawEntry(be,$("turnBack"));
+ const t=$("turnPage");
+ t.classList.remove("active","reverse");void t.offsetWidth;
  t.style.width=$("rightCanvas").clientWidth+"px";t.style.height=$("rightCanvas").clientHeight+"px";
+ if(dir<0) t.classList.add("reverse");
  t.classList.add("active");
- setTimeout(async()=>{current=target;t.classList.remove("active");await render()},750);
+ setTimeout(async()=>{
+  viewIndex=target;t.classList.remove("active","reverse");
+  await render();turning=false;
+ },680);
 }
 function next(){turn(1)} function prev(){turn(-1)}
 
-function stopAuto(){clearInterval(autoTimer);autoTimer=null;autoRunning=false;$("auto").textContent="▶"}
+function stopAuto(){clearInterval(autoTimer);autoTimer=null;autoRunning=false;$("auto").textContent="▶";$("auto").classList.remove("on")}
 function startAuto(){
- if(!pdf)return;stopAuto();autoRunning=true;$("auto").textContent="❚❚";
+ if(!pdf) return; stopAuto(); autoRunning=true; $("auto").textContent="❚❚"; $("auto").classList.add("on");
  const ms=Number($("speed").value);
- autoTimer=setInterval(()=>{if(current>=max())stopAuto();else next()},ms);
+ autoTimer=setInterval(()=>{ if(viewIndex>=views.length-1) stopAuto(); else next() },ms);
 }
 function toggleAuto(){autoRunning?stopAuto():startAuto()}
 
-async function openPDF(file,id=null,storedPage=1){
- if(!file)return;
+/* ---------------- opening / library ---------------- */
+async function openPDF(file,id=null,storedPage=1,storedOrientation=null){
+ if(!file) return;
  $("loading").style.display="block";
  try{
   const data=new Uint8Array(await file.arrayBuffer());
   pdf=await pdfjsLib.getDocument({data}).promise;
-  window._bookBlob=file;currentBookId=id||crypto.randomUUID();current=storedPage||1;
+  N=pdf.numPages;
+  window._bookBlob=file;currentBookId=id||crypto.randomUUID();
+  if(storedOrientation) setOrientationSilent(storedOrientation);
+  pageCache.clear();
+  views=buildViews(orientation,N);
+  viewIndex=findViewIndexForPage(storedPage||1);
   $("title").textContent=file.name;
   $("startScreen").style.display="none";$("library").classList.remove("open");
   await render();
- }catch(e){console.error(e);toast("No se pudo abrir el PDF")}
+ }catch(e){ console.error(e); toast("No se pudo abrir el PDF") }
  $("loading").style.display="none";
 }
 async function addToLibrary(file){
- if(!file)return;
+ if(!file) return;
  const id=crypto.randomUUID();
- await dbPut({id,name:file.name,blob:file,page:1,orientation:"portrait"});
+ await dbPut(STORE,{id,name:file.name,blob:file,page:1,orientation:"portrait"});
  await showLibrary();toast("Libro añadido a la biblioteca");
 }
 async function showLibrary(){
- const arr=await dbAll();$("books").innerHTML="";
+ const arr=await dbAll(STORE);$("books").innerHTML="";
  for(const b of arr){
   const card=document.createElement("div");card.className="bookCard";
   const cover=document.createElement("div");cover.className="cover";
   const c=document.createElement("canvas");cover.appendChild(c);
   const nm=document.createElement("div");nm.className="bookName";nm.textContent=b.name;
   const rm=document.createElement("button");rm.className="removeBook";rm.textContent="×";
-  rm.onclick=async e=>{e.stopPropagation();await dbDelete(b.id);showLibrary()};
-  card.append(cover,nm,rm);card.onclick=()=>openPDF(b.blob,b.id,b.page||1);
+  rm.onclick=async e=>{e.stopPropagation();await dbDelete(STORE,b.id);showLibrary()};
+  card.append(cover,nm,rm);
+  card.onclick=()=>openPDF(b.blob,b.id,b.page||1,b.orientation);
   $("books").appendChild(card);
   try{
    const bytes=new Uint8Array(await b.blob.arrayBuffer()),p=await pdfjsLib.getDocument({data:bytes}).promise;
-   const pg=await p.getPage(1),vp=pg.getViewport({scale:1}),scale=Math.min(120/vp.width,160/vp.height);
-   const v=pg.getViewport({scale});c.width=v.width*devicePixelRatio;c.height=v.height*devicePixelRatio;
-   await pg.render({canvasContext:c.getContext("2d"),viewport:v,transform:[devicePixelRatio,0,0,devicePixelRatio,0,0]}).promise;
+   const pg=await p.getPage(1),vp=pg.getViewport({scale:1}),scale=Math.min(130/vp.width,168/vp.height);
+   const v=pg.getViewport({scale});c.width=v.width*DPR;c.height=v.height*DPR;
+   c.style.width=v.width+"px";c.style.height=v.height+"px";
+   await pg.render({canvasContext:c.getContext("2d"),viewport:v,transform:[DPR,0,0,DPR,0,0]}).promise;
   }catch(e){}
  }
  $("library").classList.add("open");
 }
 
+/* ---------------- orientation / zoom / night ---------------- */
+function setOrientationSilent(o){ orientation=o }
 function setOrientation(o){
- orientation=o;$("book").classList.toggle("portrait",o==="portrait");
+ if(o===orientation||!pdf){ orientation=o; return }
+ const curPage=views[viewIndex]?primaryPageOf(views[viewIndex]):1;
+ orientation=o;
+ views=buildViews(orientation,N);
+ viewIndex=findViewIndexForPage(curPage);
  $("orientation").textContent=o==="portrait"?"↕":"↔";
- if(pdf)render();
+ pageCache.clear();
+ render();
 }
 function setZoom(z){
  zoom=Math.max(1,Math.min(2.5,z));$("zoomRange").value=zoom;
@@ -401,38 +583,38 @@ function setZoom(z){
  $("zoomLayer").style.transform=`scale(${zoom})`;
 }
 function resetZoom(){setZoom(1)}
-function applyNight(on){$("app").classList.toggle("night",on);$("nightSwitch").checked=on;$("night").textContent=on?"☀":"☾"}
+function applyNight(on){ $("app").classList.toggle("night",on); $("nightSwitch").checked=on; $("night").textContent=on?"☀":"☾"; $("night").classList.toggle("on",on) }
 function resetHideTimer(){
  clearTimeout(hideTimer);showControls();
- if($("hideControls").checked)hideTimer=setTimeout(hideControls,2800)
+ if($("hideControls").checked) hideTimer=setTimeout(hideControls,3200);
 }
-function showControls(){
- controlsVisible=true;$("topBar").classList.remove("hiddenUI");$("bottomBar").classList.remove("hiddenUI")
-}
-function hideControls(){
- controlsVisible=false;$("topBar").classList.add("hiddenUI");$("bottomBar").classList.add("hiddenUI")
-}
+function showControls(){ controlsVisible=true; $("topLeft").classList.remove("hiddenUI"); $("topRight").classList.remove("hiddenUI"); $("dock").classList.remove("hiddenUI") }
+function hideControls(){ controlsVisible=false; $("topLeft").classList.add("hiddenUI"); $("topRight").classList.add("hiddenUI"); $("dock").classList.add("hiddenUI") }
 
+/* ---------------- wiring ---------------- */
 $("pdfInput").onchange=e=>openPDF(e.target.files[0]);
 $("libraryInput").onchange=e=>addToLibrary(e.target.files[0]);
 $("open").onclick=()=>$("pdfInput").click();
 $("music").onclick=()=>$("audioInput").click();
 $("audioInput").onchange=e=>{
- const f=e.target.files[0];if(!f)return;
- if(musicURL)URL.revokeObjectURL(musicURL);musicURL=URL.createObjectURL(f);$("audio").src=musicURL;
- $("audio").volume=Number($("volume").value);$("audio").play().then(()=>$("audioPlay").textContent="❚❚").catch(()=>toast("Pulsa música para iniciar"));
+ const f=e.target.files[0];if(!f) return;
+ if(musicURL) URL.revokeObjectURL(musicURL);musicURL=URL.createObjectURL(f);$("audio").src=musicURL;
+ $("audio").volume=Number($("volume").value);
+ $("audio").play().then(()=>{$("audioPlay").textContent="❚❚";$("music").classList.add("on")}).catch(()=>toast("Pulsa música para iniciar"));
 };
 $("audioPlay").onclick=()=>{
  if(!$("audio").src){$("audioInput").click();return}
- if($("audio").paused){$("audio").play();$("audioPlay").textContent="❚❚"}else{$("audio").pause();$("audioPlay").textContent="♫"}
+ if($("audio").paused){$("audio").play()}else{$("audio").pause()}
 };
+$("audio").addEventListener("play",()=>{$("audioPlay").textContent="❚❚";$("music").classList.add("on")});
+$("audio").addEventListener("pause",()=>{$("audioPlay").textContent="♫";$("music").classList.remove("on")});
 $("volume").oninput=e=>$("audio").volume=Number(e.target.value);
 $("orientation").onclick=()=>setOrientation(orientation==="portrait"?"landscape":"portrait");
 $("night").onclick=()=>applyNight(!$("app").classList.contains("night"));
 $("nightSwitch").onchange=e=>applyNight(e.target.checked);
 $("auto").onclick=toggleAuto;
-$("speed").onchange=()=>{if(autoRunning)startAuto()};
-$("speed2").onchange=e=>{$("speed").value=e.target.value;if(autoRunning)startAuto()};
+$("speed").onchange=()=>{if(autoRunning) startAuto()};
+$("speed2").onchange=e=>{$("speed").value=e.target.value;if(autoRunning) startAuto()};
 $("fullscreen").onclick=async()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.();
 $("libraryBtn").onclick=showLibrary;$("openLibrary").onclick=showLibrary;$("closeLibrary").onclick=()=>$("library").classList.remove("open");
 $("settingsBtn").onclick=()=>$("settings").classList.toggle("open");
@@ -440,25 +622,25 @@ $("zoomRange").oninput=e=>setZoom(Number(e.target.value));
 $("hideControls").onchange=resetHideTimer;
 $("menu").onclick=()=>{controlsVisible?hideControls():showControls();clearTimeout(hideTimer)};
 $("next").onclick=next;$("next2").onclick=next;$("prev").onclick=prev;$("prev2").onclick=prev;
-$("first").onclick=async()=>{stopAuto();current=1;await render()};
-$("last").onclick=async()=>{stopAuto();current=orientation==="landscape"&&max()%2===0?max()-1:max();current=Math.max(1,current);await render()};
-$("progress").oninput=async e=>{stopAuto();current=Number(e.target.value);if(orientation==="landscape"&&current%2===0)current--;await render()};
+$("first").onclick=async()=>{stopAuto();viewIndex=0;await render()};
+$("last").onclick=async()=>{stopAuto();viewIndex=views.length-1;await render()};
+$("progress").oninput=async e=>{stopAuto();viewIndex=Number(e.target.value);await render()};
+$("applyBg").onclick=()=>{ const url=$("bgUrlInput").value.trim(); if(url) applyBg(url); };
+$("clearBg").onclick=()=>{ $("bgUrlInput").value=""; clearBg() };
 
 document.addEventListener("keydown",e=>{
  resetHideTimer();
- if(e.key==="ArrowRight"||e.key==="PageDown")next();
- if(e.key==="ArrowLeft"||e.key==="PageUp")prev();
+ if(e.key==="ArrowRight"||e.key==="PageDown") next();
+ if(e.key==="ArrowLeft"||e.key==="PageUp") prev();
  if(e.key===" "){e.preventDefault();toggleAuto()}
- if(e.key.toLowerCase()==="f")$("fullscreen").click();
- if(e.key==="Escape")$("settings").classList.remove("open");
+ if(e.key.toLowerCase()==="f") $("fullscreen").click();
+ if(e.key==="Escape") $("settings").classList.remove("open");
 });
 
-$("bookArea").addEventListener("pointerdown",e=>{
- touchStartX=e.clientX;touchStartY=e.clientY;
-});
+$("bookArea").addEventListener("pointerdown",e=>{ touchStartX=e.clientX;touchStartY=e.clientY });
 $("bookArea").addEventListener("pointerup",e=>{
  const dx=e.clientX-touchStartX,dy=e.clientY-touchStartY;
- if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)){dx<0?next():prev()}
+ if(Math.abs(dx)>50&&Math.abs(dx)>Math.abs(dy)){ dx<0?next():prev() }
  resetHideTimer();
 });
 $("bookArea").addEventListener("dblclick",resetZoom);
@@ -467,22 +649,26 @@ $("corner").onclick=e=>{e.stopPropagation();next()};
 $("bookArea").addEventListener("wheel",e=>{
  if(e.ctrlKey){e.preventDefault();setZoom(zoom+(e.deltaY<0?.08:-.08))}
 },{passive:false});
-
 $("bookArea").addEventListener("touchstart",e=>{
- if(e.touches.length===2){
-  pinchStart=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY)
- }
+ if(e.touches.length===2) pinchStart=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
 },{passive:true});
 $("bookArea").addEventListener("touchmove",e=>{
  if(e.touches.length===2){
   const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-  if(pinchStart)setZoom(zoom*(d/pinchStart));pinchStart=d;e.preventDefault()
+  if(pinchStart) setZoom(zoom*(d/pinchStart));pinchStart=d;e.preventDefault()
  }
 },{passive:false});
 $("bookArea").addEventListener("touchend",()=>{pinchStart=0;resetHideTimer()},{passive:true});
 
-window.addEventListener("resize",()=>pdf&&render());
-setOrientation(window.innerWidth>window.innerHeight?"landscape":"portrait");
+window.addEventListener("resize",()=>{
+ clearTimeout(resizeTimer);
+ resizeTimer=setTimeout(()=>{ if(pdf) render() },160);
+});
+
+/* ---------------- init ---------------- */
+loadBg();
+setOrientationSilent(window.innerWidth>window.innerHeight?"landscape":"portrait");
+$("orientation").textContent=orientation==="portrait"?"↕":"↔";
 resetHideTimer();
 </script>
 </div>
