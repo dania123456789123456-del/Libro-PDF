@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>BookLeaf Reader — V6</title>
+<title>BookLeaf Reader — V7</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module"></script>
 
 <style>
@@ -299,37 +299,69 @@ const $=id=>document.getElementById(id);
 const DPR=Math.min(window.devicePixelRatio||1,2);
 
 /* =====================================================================
+   CATÁLOGO DE LIBROS (recomendado)
+   En vez de tocar este código cada vez que quieras agregar un libro,
+   crea un archivo "catalogo.json" en tu repositorio de GitHub y pega
+   aquí su link "raw". El lector lo vuelve a leer cada vez que abres la
+   biblioteca, así que solo editas el JSON en GitHub y listo — nunca
+   más tienes que tocar este archivo para agregar libros nuevos.
+
+   Formato del catalogo.json:
+   {
+     "books": [
+       {
+         "id": "primer-mes",
+         "name": "Nuestro Primer Mes",
+         "pages": [
+           "https://raw.githubusercontent.com/usuario/repo/main/pagina01.jpg",
+           "https://raw.githubusercontent.com/usuario/repo/main/pagina02.jpg",
+           "https://raw.githubusercontent.com/usuario/repo/main/pagina03.jpg"
+         ],
+         "audioUrl": "https://raw.githubusercontent.com/usuario/repo/main/cancion.mp3",
+         "bgUrl": "https://raw.githubusercontent.com/usuario/repo/main/fondo.jpg"
+       }
+     ]
+   }
+
+   "pages" es la lista de imágenes (una por cada hoja del libro, en
+   orden: la primera es la portada, la última la contraportada — el
+   lector las agrupa solo, igual que ya hace con los PDF). Si prefieres
+   seguir usando un PDF para algún libro del catálogo, puedes poner
+   "pdfUrl" en vez de "pages" en ese objeto. audioUrl y bgUrl son
+   opcionales (déjalos como "" o quítalos si no aplican).
+
+   Truco: GitHub a veces tarda unos minutos en refrescar el link "raw"
+   después de editar el JSON. Si acabas de subir cambios y no se ven,
+   agrega al final del link algo como "?v=2" (y súbelo así) para forzar
+   una copia nueva; sube ese número cada vez que vuelvas a editar el
+   catálogo.
+===================================================================== */
+const CATALOG_URL=""; // pega aquí el link "raw" de tu catalogo.json
+
+/* =====================================================================
    FONDO POR DEFECTO
-   Pega aquí un link directo a una imagen (por ejemplo un link "raw" de
-   GitHub) para usarla como fondo general del lector. Se aplica siempre
-   que no estés dentro de un libro precargado que traiga su propio fondo
-   (ver bgUrl en PRESET_BOOKS más abajo). Déjalo vacío ("") para no usar
+   Pega aquí un link directo a una imagen para usarla como fondo general
+   del lector. Se aplica siempre que no estés dentro de un libro que
+   traiga su propio fondo (bgUrl). Déjalo vacío ("") para no usar
    ningún fondo por defecto.
 ===================================================================== */
 const DEFAULT_BG="";
 
 /* =====================================================================
-   LIBROS PRECARGADOS DESDE GITHUB
-   1) Sube tu PDF, tu música (mp3) y tu imagen de fondo a un repositorio
-      de GitHub (puede ser público, no hace falta que sea de pago).
-   2) Abre cada archivo en GitHub y copia el link del botón "Raw" (o
-      arma el link con este formato):
-      https://raw.githubusercontent.com/TU-USUARIO/TU-REPO/main/archivo.ext
-   3) Pega esos 3 links en un objeto como el de ejemplo de abajo y
-      quita las "//" para activarlo. Puedes agregar tantos libros como
-      quieras, uno por objeto, separados por coma.
-   Al abrir uno de estos libros desde la biblioteca, se carga el PDF,
-   se pone su música y se aplica su fondo automáticamente.
-   audioUrl y bgUrl pueden dejarse en "" si un libro no los necesita.
+   LIBROS EXTRA DIRECTO EN EL CÓDIGO (opcional)
+   Si no quieres usar el catalogo.json, puedes seguir agregando libros
+   aquí mismo con el mismo formato (pages o pdfUrl, audioUrl, bgUrl).
+   Los libros de aquí y los del catalogo.json aparecen juntos en la
+   biblioteca.
 ===================================================================== */
 const PRESET_BOOKS=[
- // { id:"heidys-juan", name:"NUESTRO PRIMER MES",
- //   pdfUrl:"https://raw.githubusercontent.com/dania123456789123456-del/Libro-PDF/main/album.pdf",
- //   audioUrl:"https://raw.githubusercontent.com/dania123456789123456-del/Libro-PDF/main/Jay_Wheeler.mp3",
- //   bgUrl:"https://raw.githubusercontent.com/dania123456789123456-del/Libro-PDF/main/Picsart_25-05-20_00-40-42-187.jpg" },
+ // { id:"heidys-juan", name:"Heidys & Juan — 14.10.2024",
+ //   pdfUrl:"https://raw.githubusercontent.com/usuario/repo/main/album.pdf",
+ //   audioUrl:"https://raw.githubusercontent.com/usuario/repo/main/cancion.mp3",
+ //   bgUrl:"https://raw.githubusercontent.com/usuario/repo/main/fondo.jpg" },
 ];
 
-let pdf=null, N=0;
+let currentSource=null, N=0; // currentSource: {type:"pdf",doc} or {type:"images",urls:[...]}
 const orientation="landscape"; // el lector ahora funciona solo en formato horizontal (libro abierto)
 let views=[], viewIndex=0;
 let autoTimer=null, autoRunning=false;
@@ -391,9 +423,9 @@ function toast(t){
 
 /* ---------------- "view" model -----------------
    Page 1 and the last page are always treated as covers and shown ALONE.
-   Everything in between is paired into spreads. If that interior has an
-   odd number of pages, the leftover page becomes its own single view
-   right before the back cover — no invented/blank pages, ever. */
+   Everything in between is paired into spreads; if that interior has an
+   odd number of pages, one blank leaf is added so the pairing always
+   comes out even and BOTH covers stay solo — like a real book. */
 function buildViews(total){
  const v=[];
  if(total<=0) return v;
@@ -401,11 +433,9 @@ function buildViews(total){
  const first=1,last=total;
  const interior=[];
  for(let p=first+1;p<last;p++) interior.push(p);
- let orphan=null;
- if(interior.length%2===1) orphan=interior.pop();
+ if(interior.length%2===1) interior.push("blank");
  v.push({type:"single",page:first});
  for(let i=0;i<interior.length;i+=2) v.push({type:"spread",left:interior[i],right:interior[i+1]});
- if(orphan!==null) v.push({type:"single",page:orphan});
  v.push({type:"single",page:last});
  return v;
 }
@@ -421,19 +451,60 @@ function findViewIndexForPage(p){
  return 0;
 }
 
+function loadImage(url){
+ return new Promise((resolve,reject)=>{
+  const img=new Image();
+  img.crossOrigin="anonymous";
+  img.onload=()=>resolve(img);
+  img.onerror=()=>reject(new Error("No se pudo cargar la imagen: "+url));
+  img.src=url;
+ });
+}
+async function getReferenceSize(){
+ if(currentSource.type==="pdf"){
+  const page=await currentSource.doc.getPage(1);
+  const base=page.getViewport({scale:1});
+  return {width:base.width,height:base.height};
+ }
+ const img=await loadImage(currentSource.urls[0]);
+ return {width:img.naturalWidth,height:img.naturalHeight};
+}
+
 /* ---------------- rendering with cache ---------------- */
 async function getPageCanvas(n,maxW,maxH){
- if(!pdf||n<1||n>N) return null;
+ if(n==="blank"){
+  const key="blank:"+Math.round(maxW/8)+":"+Math.round(maxH/8);
+  if(pageCache.has(key)) return pageCache.get(key);
+  const ref=await getReferenceSize();
+  const scale=Math.min(maxW/ref.width,maxH/ref.height);
+  const w=ref.width*scale,h=ref.height*scale;
+  const off=document.createElement("canvas");
+  off.width=Math.ceil(w*DPR);off.height=Math.ceil(h*DPR);
+  const ctx=off.getContext("2d");ctx.fillStyle="#eeece5";ctx.fillRect(0,0,off.width,off.height);
+  const entry={canvas:off,w,h};pageCache.set(key,entry);return entry;
+ }
+ if(!currentSource||n<1||n>N) return null;
  const key=n+":"+Math.round(maxW/8)+":"+Math.round(maxH/8);
  if(pageCache.has(key)) return pageCache.get(key);
- const page=await pdf.getPage(n);
- const base=page.getViewport({scale:1});
- const scale=Math.min(maxW/base.width,maxH/base.height);
- const vp=page.getViewport({scale});
- const off=document.createElement("canvas");
- off.width=Math.ceil(vp.width*DPR);off.height=Math.ceil(vp.height*DPR);
- await page.render({canvasContext:off.getContext("2d"),viewport:vp,transform:[DPR,0,0,DPR,0,0]}).promise;
- const entry={canvas:off,w:vp.width,h:vp.height};
+ let entry;
+ if(currentSource.type==="pdf"){
+  const page=await currentSource.doc.getPage(n);
+  const base=page.getViewport({scale:1});
+  const scale=Math.min(maxW/base.width,maxH/base.height);
+  const vp=page.getViewport({scale});
+  const off=document.createElement("canvas");
+  off.width=Math.ceil(vp.width*DPR);off.height=Math.ceil(vp.height*DPR);
+  await page.render({canvasContext:off.getContext("2d"),viewport:vp,transform:[DPR,0,0,DPR,0,0]}).promise;
+  entry={canvas:off,w:vp.width,h:vp.height};
+ }else{
+  const img=await loadImage(currentSource.urls[n-1]);
+  const scale=Math.min(maxW/img.naturalWidth,maxH/img.naturalHeight);
+  const w=img.naturalWidth*scale,h=img.naturalHeight*scale;
+  const off=document.createElement("canvas");
+  off.width=Math.ceil(w*DPR);off.height=Math.ceil(h*DPR);
+  off.getContext("2d").drawImage(img,0,0,off.width,off.height);
+  entry={canvas:off,w,h};
+ }
  pageCache.set(key,entry);
  if(pageCache.size>28){ pageCache.delete(pageCache.keys().next().value) }
  return entry;
@@ -457,14 +528,14 @@ function updateStacks(view){
  const leftP=view.type==="single"?view.page:view.left;
  const rightP=view.type==="single"?view.page:view.right;
  const before=leftP-1;
- const after=N-rightP;
+ const after=rightP==="blank"?0:N-rightP;
  const l=$("stackLeft"),r=$("stackRight");
  if(before>0){ l.style.opacity=.9; l.style.width=Math.min(2+22*(before/N),24)+"px" } else l.style.opacity=0;
  if(after>0){ r.style.opacity=.9; r.style.width=Math.min(2+22*(after/N),24)+"px" } else r.style.opacity=0;
 }
 
 async function render(){
- if(!pdf||!views.length) return;
+ if(!currentSource||!views.length) return;
  viewIndex=Math.max(0,Math.min(views.length-1,viewIndex));
  const view=views[viewIndex];
  const {maxW,maxH}=slotSize();
@@ -475,7 +546,7 @@ async function render(){
   drawEntry(le,$("leftCanvas"));drawEntry(re,$("rightCanvas"));
   $("book").style.width=($("leftCanvas").clientWidth+$("rightCanvas").clientWidth)+"px";
   $("book").style.height=Math.max($("leftCanvas").clientHeight,$("rightCanvas").clientHeight)+"px";
-  $("pageInfo").textContent=view.left+"–"+view.right+" / "+N;
+  $("pageInfo").textContent=view.left+(view.right==="blank"?"":"–"+view.right)+" / "+N;
  }else{
   $("leftPage").style.display="none";
   const re=await getPageCanvas(view.page,maxW,maxH);
@@ -504,7 +575,7 @@ function saveProgress(){
 
 let turning=false;
 async function turn(dir){
- if(!pdf||turning) return;
+ if(!currentSource||turning) return;
  const target=Math.max(0,Math.min(views.length-1,viewIndex+dir));
  if(target===viewIndex) return;
  turning=true;
@@ -538,7 +609,7 @@ function next(){turn(1)} function prev(){turn(-1)}
 
 function stopAuto(){clearInterval(autoTimer);autoTimer=null;autoRunning=false;$("auto").textContent="▶";$("auto").classList.remove("on")}
 function startAuto(){
- if(!pdf) return; stopAuto(); autoRunning=true; $("auto").textContent="❚❚"; $("auto").classList.add("on");
+ if(!currentSource) return; stopAuto(); autoRunning=true; $("auto").textContent="❚❚"; $("auto").classList.add("on");
  const ms=Number($("speed").value);
  autoTimer=setInterval(()=>{ if(viewIndex>=views.length-1) stopAuto(); else next() },ms);
 }
@@ -550,8 +621,9 @@ async function openPDF(file,id=null,storedPage=1){
  $("loading").style.display="block";
  try{
   const data=new Uint8Array(await file.arrayBuffer());
-  pdf=await pdfjsLib.getDocument({data}).promise;
-  N=pdf.numPages;
+  const doc=await pdfjsLib.getDocument({data}).promise;
+  currentSource={type:"pdf",doc};
+  N=doc.numPages;
   window._bookBlob=file;currentBookId=id||crypto.randomUUID();currentPresetId=null;
   pageCache.clear();
   views=buildViews(N);
@@ -570,34 +642,51 @@ async function addToLibrary(file){
  await showLibrary();toast("Libro añadido a la biblioteca");
 }
 
-/* ---------------- opening preset (GitHub) books ---------------- */
-async function getPresetDoc(preset){
- const key=preset.id||preset.pdfUrl;
- if(presetDocCache.has(key)) return presetDocCache.get(key);
- const doc=await pdfjsLib.getDocument(preset.pdfUrl).promise;
- presetDocCache.set(key,doc);
+/* ---------------- opening cloud books (JSON catalog / PRESET_BOOKS) ---------------- */
+async function getPdfDocFromUrl(url,cacheKey){
+ if(presetDocCache.has(cacheKey)) return presetDocCache.get(cacheKey);
+ const doc=await pdfjsLib.getDocument(url).promise;
+ presetDocCache.set(cacheKey,doc);
  return doc;
 }
-async function openPreset(preset){
+async function loadCatalog(){
+ if(!CATALOG_URL) return [];
+ try{
+  const res=await fetch(CATALOG_URL,{cache:"no-store"});
+  const data=await res.json();
+  return Array.isArray(data.books)?data.books:[];
+ }catch(e){ console.error("No se pudo cargar el catálogo",e); return [] }
+}
+async function openCloudBook(entry){
  $("loading").style.display="block";
  try{
-  pdf=await getPresetDoc(preset);
-  N=pdf.numPages;
-  window._bookBlob=null;currentBookId=null;currentPresetId=preset.id||preset.pdfUrl;
+  if(Array.isArray(entry.pages)&&entry.pages.length){
+   currentSource={type:"images",urls:entry.pages};
+   N=entry.pages.length;
+  }else if(entry.pdfUrl){
+   const doc=await getPdfDocFromUrl(entry.pdfUrl,entry.id||entry.pdfUrl);
+   currentSource={type:"pdf",doc};
+   N=doc.numPages;
+  }else{
+   toast("Este libro no tiene páginas configuradas");
+   $("loading").style.display="none";
+   return;
+  }
+  window._bookBlob=null;currentBookId=null;currentPresetId=entry.id||entry.pdfUrl||entry.name;
   const saved=await dbGet(SETTINGS,"preset:"+currentPresetId);
   pageCache.clear();
   views=buildViews(N);
   viewIndex=(saved&&saved.value)?findViewIndexForPage(saved.value.page||1):0;
-  $("title").textContent=preset.name||"Libro";
+  $("title").textContent=entry.name||"Libro";
   $("startScreen").style.display="none";$("library").classList.remove("open");
   await render();
-  if(preset.audioUrl){
+  if(entry.audioUrl){
    if(musicURL){URL.revokeObjectURL(musicURL);musicURL=null}
-   $("audio").src=preset.audioUrl;$("audio").volume=Number($("volume").value);
+   $("audio").src=entry.audioUrl;$("audio").volume=Number($("volume").value);
    $("audio").play().catch(()=>toast("Pulsa música para iniciar"));
   }
-  applyBg(preset.bgUrl||DEFAULT_BG);
- }catch(e){ console.error(e); toast("No se pudo cargar el libro (revisa los links en el código)") }
+  applyBg(entry.bgUrl||DEFAULT_BG);
+ }catch(e){ console.error(e); toast("No se pudo cargar el libro (revisa los links)") }
  $("loading").style.display="none";
 }
 
@@ -610,18 +699,31 @@ async function renderThumb(canvasEl,source){
   await pg.render({canvasContext:canvasEl.getContext("2d"),viewport:v,transform:[DPR,0,0,DPR,0,0]}).promise;
  }catch(e){}
 }
+async function renderThumbFromImage(canvasEl,url){
+ try{
+  const img=await loadImage(url);
+  const scale=Math.min(130/img.naturalWidth,168/img.naturalHeight);
+  const w=img.naturalWidth*scale,h=img.naturalHeight*scale;
+  canvasEl.width=w*DPR;canvasEl.height=h*DPR;
+  canvasEl.style.width=w+"px";canvasEl.style.height=h+"px";
+  canvasEl.getContext("2d").drawImage(img,0,0,canvasEl.width,canvasEl.height);
+ }catch(e){}
+}
 async function showLibrary(){
- const arr=await dbAll(STORE);$("books").innerHTML="";
- for(const preset of PRESET_BOOKS){
+ $("books").innerHTML="";
+ const [arr,catalogBooks]=await Promise.all([dbAll(STORE),loadCatalog()]);
+ const cloudBooks=[...PRESET_BOOKS,...catalogBooks];
+ for(const entry of cloudBooks){
   const card=document.createElement("div");card.className="bookCard";
   const cover=document.createElement("div");cover.className="cover";
   const c=document.createElement("canvas");cover.appendChild(c);
   const badge=document.createElement("div");badge.className="cloudBadge";badge.textContent="GitHub";
-  const nm=document.createElement("div");nm.className="bookName";nm.textContent=preset.name||"Libro";
+  const nm=document.createElement("div");nm.className="bookName";nm.textContent=entry.name||"Libro";
   card.append(badge,cover,nm);
-  card.onclick=()=>openPreset(preset);
+  card.onclick=()=>openCloudBook(entry);
   $("books").appendChild(card);
-  renderThumb(c,preset.pdfUrl);
+  if(Array.isArray(entry.pages)&&entry.pages.length) renderThumbFromImage(c,entry.pages[0]);
+  else if(entry.pdfUrl) renderThumb(c,entry.pdfUrl);
  }
  for(const b of arr){
   const card=document.createElement("div");card.className="bookCard";
@@ -740,7 +842,7 @@ $("bookArea").addEventListener("touchend",()=>{pinchStart=0},{passive:true});
 
 window.addEventListener("resize",()=>{
  clearTimeout(resizeTimer);
- resizeTimer=setTimeout(()=>{ if(pdf) render() },160);
+ resizeTimer=setTimeout(()=>{ if(currentSource) render() },160);
 });
 
 /* ---------------- init ---------------- */
