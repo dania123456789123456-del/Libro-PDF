@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>BookLeaf Reader — V8</title>
+<title>BookLeaf Reader — V9</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module"></script>
 
 <style>
@@ -377,7 +377,7 @@ const DPR=Math.min(window.devicePixelRatio||1,2);
    una copia nueva; sube ese número cada vez que vuelvas a editar el
    catálogo.
 ===================================================================== */
-const CATALOG_URL="https://raw.githubusercontent.com/dania123456789123456-del/Libro-PDF/refs/heads/main/Cat%C3%A1logo.json"; // pega aquí el link "raw" de tu catalogo.json
+const CATALOG_URL=""; // pega aquí el link "raw" de tu catalogo.json
 
 /* =====================================================================
    FONDO POR DEFECTO
@@ -636,19 +636,37 @@ async function turn(dir){
  ]);
  const fe=await getPageCanvas(frontPage,maxW,maxH), be=await getPageCanvas(backPage,maxW,maxH);
  drawEntry(fe,$("turnFront"));drawEntry(be,$("turnBack"));
+
+ // Paint whatever the curl is about to reveal with its FINAL content right
+ // now, underneath the still-covering front face. That way, at every point
+ // of the rotation — including the edge-on midpoint — what's behind the
+ // turning leaf is already correct: never blank, never the old page.
+ if(dir>0){
+  const revealEntry=await getPageCanvas(rightPageOf(nextView),maxW,maxH);
+  drawEntry(revealEntry,$("rightCanvas"));
+ }else{
+  const revealPage=leftPageOf(nextView);
+  if(revealPage!==null){
+   $("leftPage").style.display="block";
+   const revealEntry=await getPageCanvas(revealPage,maxW,maxH);
+   drawEntry(revealEntry,$("leftCanvas"));
+   if(curView.type==="single"){
+    // coming from a cover: the left slot didn't exist a moment ago, so the
+    // book box needs to grow to fit both pages again before we reveal it
+    $("book").classList.remove("singleView");
+    $("book").style.width=($("leftCanvas").clientWidth+$("rightCanvas").clientWidth)+"px";
+    $("book").style.height=Math.max($("leftCanvas").clientHeight,$("rightCanvas").clientHeight)+"px";
+   }
+  }
+ }
+
  const t=$("turnPage");
  t.classList.remove("active","reverse");void t.offsetWidth;
  t.style.width=$("rightCanvas").clientWidth+"px";t.style.height=$("rightCanvas").clientHeight+"px";
- // The static page underneath still shows the exact same content the curling
- // face starts with — hide it for the duration of the flip so nothing "ghosts"
- // through while the turning face is edge-on mid-rotation.
- const hideEl=dir>0?$("rightPage"):(curView.type==="spread"?$("leftPage"):$("rightPage"));
- hideEl.style.visibility="hidden";
  if(dir<0) t.classList.add("reverse");
  t.classList.add("active");
  setTimeout(async()=>{
   viewIndex=target;t.classList.remove("active","reverse");
-  hideEl.style.visibility="";
   await render();turning=false;
  },740);
 }
