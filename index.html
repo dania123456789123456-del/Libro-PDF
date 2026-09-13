@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>BookLeaf Reader — V5</title>
+<title>BookLeaf Reader — V6</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module"></script>
 
 <style>
@@ -73,7 +73,7 @@ button:focus,input:focus,select:focus{outline:none}
 /* paper-stack ribbons: anchored to grow OUTWARD from the book only, so they
    can never creep on top of the page itself, at rest or mid-flip */
 .stack{position:absolute;top:8px;bottom:8px;width:2px;border-radius:2px;opacity:0;z-index:0;
-  transition:width .25s,opacity .25s;pointer-events:none;
+  pointer-events:none;
   background:repeating-linear-gradient(180deg,#d9d4c8 0 2px,#c4bfae 2px 3px);box-shadow:0 3px 8px rgba(0,0,0,.35)}
 #stackLeft{right:100%;margin-right:1px}
 #stackRight{left:100%;margin-left:1px}
@@ -340,7 +340,7 @@ let presetDocCache=new Map();
 let resizeTimer=null;
 
 /* ---------------- storage (IndexedDB: books + settings) ---------------- */
-const DB="bookleaf-v5", STORE="books", SETTINGS="settings";
+const DB="bookleaf", STORE="books", SETTINGS="settings";
 function dbOpen(){
  return new Promise((resolve,reject)=>{
   const r=indexedDB.open(DB,1);
@@ -391,9 +391,9 @@ function toast(t){
 
 /* ---------------- "view" model -----------------
    Page 1 and the last page are always treated as covers and shown ALONE.
-   Everything in between is paired into spreads; if that interior has an
-   odd number of pages, one blank leaf is added so the pairing always
-   comes out even and the covers stay solo — like a real book. */
+   Everything in between is paired into spreads. If that interior has an
+   odd number of pages, the leftover page becomes its own single view
+   right before the back cover — no invented/blank pages, ever. */
 function buildViews(total){
  const v=[];
  if(total<=0) return v;
@@ -401,9 +401,11 @@ function buildViews(total){
  const first=1,last=total;
  const interior=[];
  for(let p=first+1;p<last;p++) interior.push(p);
- if(interior.length%2===1) interior.push("blank");
+ let orphan=null;
+ if(interior.length%2===1) orphan=interior.pop();
  v.push({type:"single",page:first});
  for(let i=0;i<interior.length;i+=2) v.push({type:"spread",left:interior[i],right:interior[i+1]});
+ if(orphan!==null) v.push({type:"single",page:orphan});
  v.push({type:"single",page:last});
  return v;
 }
@@ -421,18 +423,6 @@ function findViewIndexForPage(p){
 
 /* ---------------- rendering with cache ---------------- */
 async function getPageCanvas(n,maxW,maxH){
- if(n==="blank"){
-  const key="blank:"+Math.round(maxW/8)+":"+Math.round(maxH/8);
-  if(pageCache.has(key)) return pageCache.get(key);
-  const page=await pdf.getPage(1);
-  const base=page.getViewport({scale:1});
-  const scale=Math.min(maxW/base.width,maxH/base.height);
-  const w=base.width*scale,h=base.height*scale;
-  const off=document.createElement("canvas");
-  off.width=Math.ceil(w*DPR);off.height=Math.ceil(h*DPR);
-  const ctx=off.getContext("2d");ctx.fillStyle="#eeece5";ctx.fillRect(0,0,off.width,off.height);
-  const entry={canvas:off,w,h};pageCache.set(key,entry);return entry;
- }
  if(!pdf||n<1||n>N) return null;
  const key=n+":"+Math.round(maxW/8)+":"+Math.round(maxH/8);
  if(pageCache.has(key)) return pageCache.get(key);
@@ -467,7 +457,7 @@ function updateStacks(view){
  const leftP=view.type==="single"?view.page:view.left;
  const rightP=view.type==="single"?view.page:view.right;
  const before=leftP-1;
- const after=rightP==="blank"?0:N-rightP;
+ const after=N-rightP;
  const l=$("stackLeft"),r=$("stackRight");
  if(before>0){ l.style.opacity=.9; l.style.width=Math.min(2+22*(before/N),24)+"px" } else l.style.opacity=0;
  if(after>0){ r.style.opacity=.9; r.style.width=Math.min(2+22*(after/N),24)+"px" } else r.style.opacity=0;
@@ -485,7 +475,7 @@ async function render(){
   drawEntry(le,$("leftCanvas"));drawEntry(re,$("rightCanvas"));
   $("book").style.width=($("leftCanvas").clientWidth+$("rightCanvas").clientWidth)+"px";
   $("book").style.height=Math.max($("leftCanvas").clientHeight,$("rightCanvas").clientHeight)+"px";
-  $("pageInfo").textContent=view.left+(view.right==="blank"?"":"–"+view.right)+" / "+N;
+  $("pageInfo").textContent=view.left+"–"+view.right+" / "+N;
  }else{
   $("leftPage").style.display="none";
   const re=await getPageCanvas(view.page,maxW,maxH);
@@ -506,7 +496,8 @@ function prefetchAround(){
 }
 function saveProgress(){
  if(!views[viewIndex]) return;
- const page=primaryPageOf(views[viewIndex]);
+ const finished=viewIndex===views.length-1; // reached the back cover: treat as done, restart next time
+ const page=finished?1:primaryPageOf(views[viewIndex]);
  if(currentBookId) dbPut(STORE,{id:currentBookId,name:$("title").textContent,blob:window._bookBlob,page});
  else if(currentPresetId) dbPut(SETTINGS,{key:"preset:"+currentPresetId,value:{page}});
 }
