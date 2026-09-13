@@ -1,0 +1,15 @@
+{
+  "books": [
+    {
+      "id": "primer-mes",
+      "name": "Nuestro Primer Mes",
+      "pages": [
+        "https://raw.githubusercontent.com/usuario/repo/main/pagina01.jpg",
+        "https://raw.githubusercontent.com/usuario/repo/main/pagina02.jpg",
+        "https://raw.githubusercontent.com/usuario/repo/main/pagina03.jpg"
+      ],
+      "audioUrl": "https://raw.githubusercontent.com/dania123456789123456-del/Libro-PDF/main/Jay_Wheeler.mp3",
+      "bgUrl": "https://raw.githubusercontent.com/usuario/repo/main/fondo.jpg"
+    }
+  ]
+}
