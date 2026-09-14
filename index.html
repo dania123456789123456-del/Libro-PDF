@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>BookLeaf Reader — V10</title>
+<title>BookLeaf Reader — V11</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module"></script>
 
 <style>
@@ -43,7 +43,6 @@ button:focus,input:focus,select:focus{outline:none}
 }
 .glassBtn{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;
   font-size:17px;opacity:.85;transition:opacity .18s,transform .18s,background .18s;flex-shrink:0}
-.glassBtn:hover{opacity:1;background:rgba(255,255,255,.12);transform:scale(1.06)}
 .glassBtn:active{transform:scale(.94);background:rgba(255,255,255,.16)}
 .glassBtn.on{background:var(--accent);opacity:1;box-shadow:0 4px 14px rgba(94,92,230,.5)}
 
@@ -142,13 +141,10 @@ button:focus,input:focus,select:focus{outline:none}
 #corner{position:absolute;z-index:30;right:0;bottom:0;width:0;height:0;cursor:pointer;
   border-style:solid;border-width:0 0 34px 34px;border-color:transparent transparent rgba(255,255,255,.16) transparent;
   transition:.2s;filter:drop-shadow(0 -2px 4px rgba(0,0,0,.25))}
-#corner:hover{border-width:0 0 46px 46px;border-color:transparent transparent rgba(255,255,255,.32) transparent}
 
 .side{position:absolute;z-index:60;top:50%;width:64px;height:64px;transform:translateY(-50%);
   display:flex;align-items:center;justify-content:center;font-size:26px;border-radius:50%;
   color:#fff;opacity:0;transition:opacity .2s,background .2s}
-#reader:hover .side{opacity:.5}
-.side:hover{opacity:1!important;background:rgba(255,255,255,.1)}
 #prev{left:14px}#next{right:14px}
 
 /* ---------- floating menu button (always visible, never covered) ---------- */
@@ -182,7 +178,6 @@ button:focus,input:focus,select:focus{outline:none}
 .pickerMenu.open{display:flex}
 .pickerOption{padding:9px 12px;border-radius:10px;font-size:13px;text-align:left;color:#fff;opacity:.8;
   display:flex;align-items:center;justify-content:space-between;transition:.15s}
-.pickerOption:hover{background:rgba(255,255,255,.12);opacity:1}
 .pickerOption.active{background:var(--accent);opacity:1}
 
 #startScreen,#library{position:absolute;z-index:200;inset:0;display:flex;flex-direction:column;align-items:center;
@@ -193,7 +188,6 @@ button:focus,input:focus,select:focus{outline:none}
 .actionsRow{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px}
 .action{padding:11px 18px;border-radius:16px;background:rgba(255,255,255,.1);border:1px solid var(--glass-border);
   color:#fff;cursor:pointer;font-size:13.5px;transition:.15s;display:inline-flex;align-items:center;gap:6px}
-.action:hover{background:rgba(255,255,255,.18);transform:translateY(-1px)}
 .action.primary{background:var(--accent);border:0}
 .action.wide{margin-top:6px}
 
@@ -207,7 +201,6 @@ button:focus,input:focus,select:focus{outline:none}
 .bookCard{min-height:212px;border-radius:18px;overflow:hidden;cursor:pointer;position:relative;text-align:left;
   transition:.18s;background:linear-gradient(155deg,rgba(255,255,255,.1),rgba(255,255,255,.03));
   border:1px solid rgba(255,255,255,.14)}
-.bookCard:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.3)}
 .cover{height:168px;background:#1c1c20;display:flex;align-items:center;justify-content:center;overflow:hidden}
 .cover canvas{max-width:100%;max-height:100%;object-fit:contain;box-shadow:0 4px 16px rgba(0,0,0,.4)}
 .bookName{font-size:12px;padding:9px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.85}
@@ -236,6 +229,19 @@ button:focus,input:focus,select:focus{outline:none}
   #books{grid-template-columns:repeat(auto-fill,minmax(118px,1fr))}
   .cover{height:138px}
   #dock{gap:8px;padding:8px 10px}
+}
+
+/* Hover effects only for devices with a real mouse. On touchscreens, :hover
+   gets simulated on tap and then stays "stuck" until something else is
+   tapped — this is what caused buttons to look permanently marked. */
+@media(hover:hover) and (pointer:fine){
+  .glassBtn:hover{opacity:1;background:rgba(255,255,255,.12);transform:scale(1.06)}
+  #corner:hover{border-width:0 0 46px 46px;border-color:transparent transparent rgba(255,255,255,.32) transparent}
+  #reader:hover .side{opacity:.5}
+  .side:hover{opacity:1!important;background:rgba(255,255,255,.1)}
+  .pickerOption:hover{background:rgba(255,255,255,.12);opacity:1}
+  .action:hover{background:rgba(255,255,255,.18);transform:translateY(-1px)}
+  .bookCard:hover{transform:translateY(-3px);border-color:rgba(255,255,255,.3)}
 }
 </style>
 </head>
@@ -945,6 +951,8 @@ document.addEventListener("selectstart",e=>e.preventDefault());
 
 /* ---------------- init ---------------- */
 applyBg(DEFAULT_BG);
+openUI(); // the toolbar starts visible in the markup — this also kicks off the
+          // auto-hide timer immediately, instead of waiting for a first tap
 </script>
 </div>
 </body>
