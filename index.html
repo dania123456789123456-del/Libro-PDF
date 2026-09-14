@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>BookLeaf Reader — V9</title>
+<title>BookLeaf Reader — V10</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module"></script>
 
 <style>
@@ -16,7 +16,8 @@
   --glass-2:rgba(255,255,255,.06);
   --glass-border:rgba(255,255,255,.22);
 }
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;tap-highlight-color:transparent}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;tap-highlight-color:transparent;
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#000;color:var(--txt);
   font-family:-apple-system,"SF Pro Display",Inter,Arial,sans-serif;-webkit-font-smoothing:antialiased}
 button,input,select{font:inherit}
@@ -174,6 +175,16 @@ button:focus,input:focus,select:focus{outline:none}
 .dockGroup{display:flex;align-items:center;gap:6px}
 .dockDivider{width:1px;height:22px;background:rgba(255,255,255,.16)}
 
+.pickerWrap{position:relative}
+.speedBtn{width:auto!important;padding:0 12px;border-radius:14px;font-size:11.5px;font-variant-numeric:tabular-nums}
+.pickerMenu{position:absolute;bottom:calc(100% + 10px);left:50%;transform:translateX(-50%);
+  min-width:118px;border-radius:16px;padding:6px;display:none;flex-direction:column;gap:2px;z-index:150}
+.pickerMenu.open{display:flex}
+.pickerOption{padding:9px 12px;border-radius:10px;font-size:13px;text-align:left;color:#fff;opacity:.8;
+  display:flex;align-items:center;justify-content:space-between;transition:.15s}
+.pickerOption:hover{background:rgba(255,255,255,.12);opacity:1}
+.pickerOption.active{background:var(--accent);opacity:1}
+
 #startScreen,#library{position:absolute;z-index:200;inset:0;display:flex;flex-direction:column;align-items:center;
   justify-content:center;text-align:center;background:rgba(0,0,0,.5);backdrop-filter:blur(10px);padding:24px}
 #startScreen .card{padding:34px 30px;border-radius:30px;max-width:560px}
@@ -287,11 +298,10 @@ button:focus,input:focus,select:focus{outline:none}
    <div class="dockGroup">
      <button class="glassBtn" id="audioPlay" title="Reproducir/pausar música">♫</button>
      <input id="volume" type="range" min="0" max="1" step=".01" value=".7">
-     <select id="speed" title="Velocidad automática">
-      <option value="3000">3 s</option><option value="5000" selected>5 s</option>
-      <option value="10000">10 s</option><option value="15000">15 s</option>
-      <option value="30000">30 s</option>
-     </select>
+     <div class="pickerWrap" id="speedWrap">
+      <button class="glassBtn speedBtn" id="speedBtn" title="Velocidad automática">5 s</button>
+      <div class="pickerMenu glass" id="speedMenu"></div>
+     </div>
      <span id="zoomText">100%</span>
    </div>
   </div>
@@ -300,7 +310,6 @@ button:focus,input:focus,select:focus{outline:none}
    <div class="setting"><span>Ocultar el menú automáticamente</span><input id="hideControls" class="switch" type="checkbox" checked></div>
    <div class="setting"><span>Modo lectura nocturna</span><input id="nightSwitch" class="switch" type="checkbox"></div>
    <div class="setting"><span>Zoom</span><input id="zoomRange" type="range" min="1" max="2.5" step=".05" value="1"></div>
-   <div class="setting"><span>Velocidad automática</span><select id="speed2"><option value="3000">3 s</option><option value="5000" selected>5 s</option><option value="10000">10 s</option><option value="15000">15 s</option><option value="30000">30 s</option></select></div>
    <div style="font-size:10.5px;opacity:.5;margin-top:8px;line-height:1.5">Pellizca para zoom · doble clic restablece · toca las esquinas para pasar página</div>
   </div>
 </div>
@@ -408,6 +417,7 @@ let views=[], viewIndex=0;
 let autoTimer=null, autoRunning=false;
 let uiOpen=false, hideTimer=null, musicURL=null, currentBookId=null, currentPresetId=null;
 let zoom=1, touchStartX=0, touchStartY=0, pinchStart=0;
+let currentSpeedMs=5000;
 let pageCache=new Map();
 let presetDocCache=new Map();
 let resizeTimer=null;
@@ -675,8 +685,7 @@ function next(){turn(1)} function prev(){turn(-1)}
 function stopAuto(){clearInterval(autoTimer);autoTimer=null;autoRunning=false;$("auto").textContent="▶";$("auto").classList.remove("on")}
 function startAuto(){
  if(!currentSource) return; stopAuto(); autoRunning=true; $("auto").textContent="❚❚"; $("auto").classList.add("on");
- const ms=Number($("speed").value);
- autoTimer=setInterval(()=>{ if(viewIndex>=views.length-1) stopAuto(); else next() },ms);
+ autoTimer=setInterval(()=>{ if(viewIndex>=views.length-1) stopAuto(); else next() },currentSpeedMs);
 }
 function toggleAuto(){autoRunning?stopAuto():startAuto()}
 
@@ -863,8 +872,26 @@ $("volume").oninput=e=>$("audio").volume=Number(e.target.value);
 $("night").onclick=()=>applyNight(!$("app").classList.contains("night"));
 $("nightSwitch").onchange=e=>applyNight(e.target.checked);
 $("auto").onclick=toggleAuto;
-$("speed").onchange=()=>{if(autoRunning) startAuto()};
-$("speed2").onchange=e=>{$("speed").value=e.target.value;if(autoRunning) startAuto()};
+const SPEED_OPTIONS=[3000,5000,10000,15000,30000];
+function renderSpeedMenu(){
+ $("speedMenu").innerHTML="";
+ SPEED_OPTIONS.forEach(ms=>{
+  const b=document.createElement("button");
+  b.className="pickerOption"+(ms===currentSpeedMs?" active":"");
+  b.textContent=(ms/1000)+" s";
+  b.onclick=e=>{ e.stopPropagation(); setSpeed(ms); $("speedMenu").classList.remove("open") };
+  $("speedMenu").appendChild(b);
+ });
+}
+function setSpeed(ms){
+ currentSpeedMs=ms;
+ $("speedBtn").textContent=(ms/1000)+" s";
+ renderSpeedMenu();
+ if(autoRunning) startAuto();
+}
+$("speedBtn").onclick=e=>{ e.stopPropagation(); $("speedMenu").classList.toggle("open") };
+document.addEventListener("click",()=>$("speedMenu").classList.remove("open"));
+renderSpeedMenu();
 $("fullscreen").onclick=async()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.();
 $("libraryBtn").onclick=showLibrary;$("openLibrary").onclick=showLibrary;$("closeLibrary").onclick=()=>$("library").classList.remove("open");
 $("settingsBtn").onclick=()=>$("settings").classList.toggle("open");
@@ -909,6 +936,12 @@ window.addEventListener("resize",()=>{
  clearTimeout(resizeTimer);
  resizeTimer=setTimeout(()=>{ if(currentSource) render() },160);
 });
+
+/* ---------------- lock down copy/selection/context menu ---------------- */
+document.addEventListener("contextmenu",e=>e.preventDefault());
+document.addEventListener("copy",e=>e.preventDefault());
+document.addEventListener("cut",e=>e.preventDefault());
+document.addEventListener("selectstart",e=>e.preventDefault());
 
 /* ---------------- init ---------------- */
 applyBg(DEFAULT_BG);
