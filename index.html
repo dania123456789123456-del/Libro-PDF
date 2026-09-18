@@ -183,6 +183,16 @@ button:focus,input:focus,select:focus{outline:none}
 #startScreen,#library{position:absolute;z-index:200;inset:0;display:flex;flex-direction:column;align-items:center;
   justify-content:center;text-align:center;background:rgba(0,0,0,.5);backdrop-filter:blur(10px);padding:24px}
 #startScreen .card{padding:34px 30px;border-radius:30px;max-width:560px}
+/* Pantalla inicial: fondo propio nítido + tarjeta estilo "panel de inicio".
+   Solo afecta a #startScreen; la biblioteca y el lector no cambian. */
+#startScreen{background-color:#000;background-size:cover;background-position:center;
+  backdrop-filter:none;-webkit-backdrop-filter:none}
+#startScreen .card{border-radius:34px;
+  background:linear-gradient(155deg,rgba(100,90,140,.5),rgba(20,20,34,.62));
+  backdrop-filter:blur(22px) saturate(160%);-webkit-backdrop-filter:blur(22px) saturate(160%);
+  border:1px solid rgba(255,255,255,.25)}
+#startScreen .card{transition:opacity .28s,transform .28s}
+#startScreen.hideCard .card{opacity:0;transform:scale(.96);pointer-events:none}
 #startScreen h1{font-size:26px;font-weight:600;margin:0 0 10px;letter-spacing:-.02em}
 #startScreen p{opacity:.68;line-height:1.55;font-size:14px;margin:0 0 20px}
 .actionsRow{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:10px}
@@ -279,6 +289,7 @@ button:focus,input:focus,select:focus{outline:none}
   <div class="ui glass" id="titlePill"><span id="title">Mi libro</span></div>
 
   <div class="ui glass" id="topRight">
+   <button class="glassBtn" id="backBtn" title="Atrás (biblioteca)">←</button>
    <button class="glassBtn" id="libraryBtn" title="Biblioteca">▦</button>
    <button class="glassBtn" id="night" title="Modo nocturno">☾</button>
    <button class="glassBtn" id="auto" title="Lectura automática">▶</button>
@@ -427,6 +438,13 @@ let currentSpeedMs=5000;
 let pageCache=new Map();
 let presetDocCache=new Map();
 let resizeTimer=null;
+let bookMusicActive=false; // true solo cuando la música que suena viene del catálogo/GitHub (no la que añades tú a mano)
+function showCard(on){ $("startScreen").classList.toggle("hideCard",!on) }
+function stopBookMusic(){
+ if(!bookMusicActive) return;
+ bookMusicActive=false;
+ $("audio").pause();$("audio").removeAttribute("src");$("audio").load();
+}
 
 /* ---------------- storage (IndexedDB: books + settings) ---------------- */
 const DB="bookleaf", STORE="books", SETTINGS="settings";
@@ -705,6 +723,7 @@ async function openPDF(file,id=null,storedPage=1){
   currentSource={type:"pdf",doc};
   N=doc.numPages;
   window._bookBlob=file;currentBookId=id||crypto.randomUUID();currentPresetId=null;
+  stopBookMusic(); // un PDF del teléfono no trae música: corta la del libro anterior
   pageCache.clear();
   views=buildViews(N);
   viewIndex=findViewIndexForPage(storedPage||1);
@@ -712,7 +731,7 @@ async function openPDF(file,id=null,storedPage=1){
   $("startScreen").style.display="none";$("library").classList.remove("open");
   applyBg(DEFAULT_BG); // reset any preset background left over from a previous book
   await render();
- }catch(e){ console.error(e); toast("No se pudo abrir el PDF") }
+ }catch(e){ console.error(e); toast("No se pudo abrir el PDF"); showCard(true) }
  $("loading").style.display="none";
 }
 async function addToLibrary(file){
@@ -763,7 +782,10 @@ async function openCloudBook(entry){
   if(entry.audioUrl){
    if(musicURL){URL.revokeObjectURL(musicURL);musicURL=null}
    $("audio").src=entry.audioUrl;$("audio").volume=Number($("volume").value);
+   bookMusicActive=true;
    $("audio").play().catch(()=>toast("Pulsa música para iniciar"));
+  }else{
+   stopBookMusic(); // este libro no trae música: corta la del libro anterior
   }
   applyBg(entry.bgUrl||DEFAULT_BG);
  }catch(e){ console.error(e); toast("No se pudo cargar el libro (revisa los links)") }
@@ -863,7 +885,9 @@ $("libraryInput").onchange=e=>addToLibrary(e.target.files[0]);
 $("open").onclick=()=>$("pdfInput").click();
 $("music").onclick=()=>$("audioInput").click();
 $("audioInput").onchange=e=>{
+ showCard(true);
  const f=e.target.files[0];if(!f) return;
+ bookMusicActive=false; // la música que eliges tú se queda sonando entre libros
  if(musicURL) URL.revokeObjectURL(musicURL);musicURL=URL.createObjectURL(f);$("audio").src=musicURL;
  $("audio").volume=Number($("volume").value);
  $("audio").play().then(()=>{$("audioPlay").textContent="❚❚";$("music").classList.add("on")}).catch(()=>toast("Pulsa música para iniciar"));
@@ -900,6 +924,24 @@ document.addEventListener("click",()=>$("speedMenu").classList.remove("open"));
 renderSpeedMenu();
 $("fullscreen").onclick=async()=>document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen?.();
 $("libraryBtn").onclick=showLibrary;$("openLibrary").onclick=showLibrary;$("closeLibrary").onclick=()=>$("library").classList.remove("open");
+// La tarjeta de la pantalla inicial se oculta al abrir biblioteca / elegir PDF / elegir música,
+// y vuelve al cerrar la biblioteca o cancelar el selector de archivos.
+$("openLibrary").addEventListener("click",()=>showCard(false));
+$("closeLibrary").addEventListener("click",()=>showCard(true));
+["pdfInput","audioInput"].forEach(id=>{
+ $(id).addEventListener("click",()=>showCard(false));
+ $(id).addEventListener("cancel",()=>showCard(true));
+});
+// Botón ATRÁS: abre la biblioteca con la pantalla inicial detrás (sin la tarjeta).
+// Al darle "Cerrar" en la biblioteca, la tarjeta reaparece y quedas en la pantalla principal.
+// (El botón ▦ de la barra sigue igual: abre la biblioteca solo para cambiar de libro.)
+$("backBtn").onclick=()=>{
+ stopAuto();closeUI();
+ stopBookMusic();$("audio").pause(); // cerrar el visualizador: la música se detiene
+ $("startScreen").style.display="";
+ showCard(false);
+ showLibrary();
+};
 $("settingsBtn").onclick=()=>$("settings").classList.toggle("open");
 $("zoomRange").oninput=e=>setZoom(Number(e.target.value));
 $("next").onclick=next;$("next2").onclick=next;$("prev").onclick=prev;$("prev2").onclick=prev;
@@ -951,8 +993,10 @@ document.addEventListener("selectstart",e=>e.preventDefault());
 
 /* ---------------- init ---------------- */
 applyBg(DEFAULT_BG);
-openUI(); // the toolbar starts visible in the markup — this also kicks off the
-          // auto-hide timer immediately, instead of waiting for a first tap
+// Fondo propio de la pantalla inicial (nítido, con una capa oscura suave)
+$("startScreen").style.backgroundImage=DEFAULT_BG?`linear-gradient(rgba(0,0,0,.25),rgba(0,0,0,.25)),url("${DEFAULT_BG}")`:"none";
+// La barra de controles empieza cerrada; solo se abre con el botón ☰
+closeUI();
 </script>
 </div>
 </body>
